@@ -1,0 +1,24 @@
+#  Ignore unnecessary files
+*.vim
+*.swp
+*.un
+*~
+
+# Include requirements.txt
+!requirements.txt
+
+# We only save json.i
+*.json
+
+# Ignore python cache files
+__pycache__/
+
+# Ignore python build artifacts
+*.egg-info/
+*.egg
+
+# Ignore build artifacts
+build/
+docs/_build
+
+.venv

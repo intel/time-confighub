@@ -1,0 +1,11 @@
+time configuration hub is published under BSD 3.0 or later.
+tc and ip command is part of iproute2 linux package are
+published under GNU General Public License Version 2 (GPLv2)
+
+Author/ Maintainers :
+Noor Azura, Ahmad Tarmizi  <noor.azura.ahmad.tarmizi@intel.com>
+Eric Eng Keong, Koay <eng.keong.koay@intel.com>
+Shi Jie Donavan, Liow <shi.jie.donavan.liow@intel.com>
+
+Copyright © 2025 Intel Corporation
+

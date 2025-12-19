@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+include src/time_config_hub/templates/*.service
+global-exclude __pycache__
+global-exclude *.py[co]
