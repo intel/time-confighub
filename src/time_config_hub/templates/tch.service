@@ -1,0 +1,27 @@
+[Unit]
+Description=Time Config Hub Daemon
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/opt/tch/venv/bin/python -m time_config_hub.service
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=false
+ProtectHome=false
+PrivateTmp=false
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

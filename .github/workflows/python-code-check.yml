@@ -1,0 +1,66 @@
+name: Python Code Quality Check
+
+on: [pull_request, workflow_dispatch]
+
+concurrency:
+  group: ci-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  code-quality:
+    runs-on: [ tch-v1 ] # temporary run on self host machine, actual shoul be => ubuntu-24.04
+
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install code-quality tools
+      run: |
+        pip install \
+          ruff==0.14.8 \
+          black==25.12.0 \
+          pylint==3.3
+
+    # ----------------------------------------------------------------------
+    # Ruff replaces Flake8 + isort + many others. Very fast.
+    # ----------------------------------------------------------------------
+    - name: Ruff Lint
+      run: ruff check .
+
+    # ----------------------------------------------------------------------
+    # Black formatting check
+    # ----------------------------------------------------------------------
+    - name: Black Format Check
+      run: black --check --config black_config.toml .
+
+    
+    # - name: Run tests
+    #   run: |
+    #     pytest tests/ -v
+
+  summary:
+    runs-on: [ tch-v1 ] # temporary run on self host machine, actual shoul be => ubuntu-24.04
+    needs: code-quality
+    if: always()
+    steps:
+    - name: Check job status
+      run: |
+        if [ "${{ needs.code-quality.result }}" == "failure" ]; then
+          echo "❌ Code quality checks failed. Please fix the issues before merging."
+          exit 1
+        elif [ "${{ needs.code-quality.result }}" == "success" ]; then
+          echo "✅ All code quality checks passed!"
+        else
+          echo "⚠️ Code quality checks were cancelled or skipped."
+          exit 1
+        fi
