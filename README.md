@@ -234,3 +234,7 @@ For issues and questions:
 3. File issues in the project repository
 4. Ensure you're using supported hardware (Intel i226 or compatible TSN cards)
 
+## Disclaimer
+This project is under development. All source code and features on the main
+branch are for the purpose of testing or evaluation and not production ready.
+
