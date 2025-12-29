@@ -58,7 +58,10 @@ time_config_hub = ["templates/*.service"]
 [tool.pytest.ini_options]
 pythonpath = [
     "src",
+    ".",
+    "tests",
 ]
+testpaths = ["tests"]
 
 
 [tool.ruff]
