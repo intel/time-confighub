@@ -1,18 +1,21 @@
 # File: yaml_parser.py
 """
-YAML Parser with Helpers
+YAML Parser
+===========
 
-This parser handles YAML files with multiple documents.
-It provides helper functions similar to XMLParser/JSONParser.
+Parses YAML files that may contain multiple documents and provides helpers to
+search for keys (e.g., ``chronos-domain``) across all documents.
 
-Example usage
--------------
->>> parser = YAMLParser()
->>> docs = parser.parse("config.yaml")
->>> if parser.has_chronos_domain():
-...     print("✅ chronos-domain found")
-... else:
-...     print("❌ chronos-domain not found")
+Example
+-------
+.. code-block:: python
+
+    parser = YAMLParser()
+    docs = parser.parse("config.yaml")
+    if parser.has_chronos_domain():
+        print("✅ chronos-domain found")
+    else:
+        print("❌ chronos-domain not found")
 """
 
 import yaml
@@ -46,18 +49,34 @@ class YAMLParser:
         return self.documents
 
     def refresh(self, file_path: str) -> None:
-        """Re-parse the YAML file."""
+        """Re-parse the YAML file.
+
+        :param file_path: Path to the YAML file to re-parse
+        :type file_path: str
+        :return: None
+        :rtype: None
+        """
         self.parse(file_path)
 
     def has_chronos_domain(self) -> bool:
-        """Check if any document contains 'chronos-domain'."""
+        """Check if any document contains ``chronos-domain``.
+
+        :return: ``True`` if found, otherwise ``False``
+        :rtype: bool
+        """
         for doc in self.documents:
             if self._contains_chronos(doc):
                 return True
         return False
 
     def _contains_chronos(self, node: Any) -> bool:
-        """Recursive helper to search for 'chronos-domain'."""
+        """Recursive helper to search for ``chronos-domain``.
+
+        :param node: A dict or list to search recursively
+        :type node: Any
+        :return: ``True`` if a match is found
+        :rtype: bool
+        """
         if isinstance(node, dict):
             for k, v in node.items():
                 if (

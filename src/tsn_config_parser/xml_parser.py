@@ -1,8 +1,16 @@
 # File: xml_parser.py
 """
-XML Parser with namespace stripping and helpers.
+XML Parser
+==========
 
-Usage:
+Parses XML configuration files into Python dictionaries, stripping namespaces
+and supporting multiple root elements. Provides helpers to query for specific
+keys such as ``chronos-domain``.
+
+Example
+-------
+.. code-block:: bash
+
     python xml_parser.py path/to/file.xml
 """
 
@@ -18,7 +26,13 @@ class XMLParser:
         self.documents: List[Dict[str, Any]] = []
 
     def parse(self, file_path: str) -> List[Dict[str, Any]]:
-        """Parse an XML file into multiple documents."""
+        """Parse an XML file into multiple documents.
+
+        :param file_path: Path to the XML file on disk
+        :type file_path: str
+        :return: Parsed documents, one per top-level element
+        :rtype: List[Dict[str, Any]]
+        """
         self.documents = []
 
         with open(file_path, "r", encoding="utf-8") as f:
@@ -34,11 +48,26 @@ class XMLParser:
         return self.documents
 
     def _strip_namespace(self, tag: str) -> str:
-        """Remove XML namespace from a tag."""
+        """Remove XML namespace from a tag.
+
+        :param tag: Tag name possibly containing an XML namespace
+        :type tag: str
+        :return: Tag name without namespace
+        :rtype: str
+        """
         return tag.split("}")[-1] if "}" in tag else tag
 
     def _element_to_dict(self, element: ET.Element) -> Dict[str, Any]:
-        """Convert an XML element to a dictionary with namespace stripped."""
+        """Convert an XML element into a dictionary.
+
+        Strips namespaces and preserves attributes as ``@attr`` keys. Text is
+        stored under ``#text`` when present alongside attributes or children.
+
+        :param element: The XML element to convert
+        :type element: xml.etree.ElementTree.Element
+        :return: A dictionary representation of the element
+        :rtype: Dict[str, Any]
+        """
         node: Dict[str, Any] = {}
         tag = self._strip_namespace(element.tag)
 
@@ -72,11 +101,21 @@ class XMLParser:
         return {tag: node} if node else {tag: None}
 
     def has_chronos_domain(self) -> bool:
-        """Check if any document contains 'chronos-domain'."""
+        """Check if any document contains ``chronos-domain``.
+
+        :return: ``True`` if found, otherwise ``False``
+        :rtype: bool
+        """
         return any(self._contains_chronos(doc) for doc in self.documents)
 
     def _contains_chronos(self, node: Any) -> bool:
-        """Recursive search for 'chronos-domain'."""
+        """Recursive search for ``chronos-domain`` within nested structures.
+
+        :param node: A dict or list to search recursively
+        :type node: Any
+        :return: ``True`` if a match is found
+        :rtype: bool
+        """
         if isinstance(node, dict):
             for k, v in node.items():
                 if (

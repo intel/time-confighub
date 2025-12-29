@@ -1,22 +1,34 @@
-# File: universal_dictionary.py
+"""
+Universal Dictionary Helpers
+============================
+
+Lightweight helpers for recursively searching nested dict/list structures.
+Primarily used by the parsers to find values across parsed TSN configuration
+documents.
+"""
+
 from typing import List, Any
 
 
 class UniversalDictionary:
-    """
-    Base class for dictionary helpers.
+    """Base class for dictionary helpers.
+
+    :param documents: Parsed configuration documents to operate on
+    :type documents: List[dict]
     """
 
     def __init__(self, documents: List[dict]):
         self.documents = documents
 
     def find_all_by_key(self, node: Any, key: str) -> List[Any]:
-        """
-        Recursively find all values associated with a key in nested dict/list.
+        """Recursively find all values associated with a key.
 
-        :param node: dict or list to search
-        :param key: key to find
-        :return: list of values
+        :param node: The dict or list to search recursively
+        :type node: Any
+        :param key: The key to match within nested structures
+        :type key: str
+        :return: All values associated with ``key`` found within ``node``
+        :rtype: List[Any]
         """
         found = []
         if isinstance(node, dict):

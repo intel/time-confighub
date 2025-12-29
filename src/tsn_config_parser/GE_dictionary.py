@@ -1,13 +1,22 @@
 # File: GE_Dictionary.py
 """
-GE Dictionary Helper for TSN XML/YAML/JSON configuration.
+GE Dictionary Helpers
+=====================
+
+Utilities to extract TSN configuration values from parsed XML/YAML/JSON
+documents. Provides convenience methods to fetch interface names, stream IDs,
+and VLAN information for talkers.
 """
 
 from typing import Any, Dict, List
 
 
 class GE_Dictionary:
-    """Helper class to extract specific TSN configuration values."""
+    """Helper class to extract specific TSN configuration values.
+
+    :param documents: Parsed configuration documents to operate on
+    :type documents: List[Dict[str, Any]]
+    """
 
     def __init__(self, documents: List[Dict[str, Any]]):
         self.documents = documents
@@ -108,9 +117,14 @@ class GE_Dictionary:
         return result
 
     def get_talker_vlan_info_by_stream(self, stream_id: str) -> List[str]:
-        """
-        Return formatted talker VLAN info for a given stream-id.
-        Reuses get_stream_ids() to ensure valid input.
+        """Return formatted talker VLAN info for a given ``stream-id``.
+
+        Validates ``stream_id`` against :meth:`get_stream_ids` before lookup.
+
+        :param stream_id: Stream identifier to query
+        :type stream_id: str
+        :return: A list of formatted strings for matching talker VLAN records
+        :rtype: List[str]
         """
         if stream_id not in self.get_stream_ids():
             return [f"Stream ID '{stream_id}' not found."]

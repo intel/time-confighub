@@ -168,25 +168,21 @@ def run_tc_command(command: str) -> Dict[str, Any]:
 
 
 def reset_root_qdisc_interface(interface: str) -> Dict[str, Dict[str, str]]:
-    """
-    Reset the root qdisc (queue discipline) for a specified network interface.
+    """Reset the root qdisc (queue discipline) for a network interface.
 
-    This function checks if a root qdisc exists on the given interface. If no root qdisc
-    is found, it returns a success response. Otherwise, it deletes the root qdisc using
-    the tc (traffic control) command and applies a safety delay before returning.
+    This function checks whether a root qdisc exists on ``interface``. If found,
+    it deletes the root qdisc using ``tc qdisc del`` and applies a safety delay.
+    If no root qdisc exists, it returns a success-like empty result.
 
-    Args:
-        interface (str): The name of the network interface (e.g., 'eth0', 'enp0s3').
-
-    Returns:
-        Dict[str, Dict[str, str]]: A dict with the command execution results with keys:
-            - 'stdout' (str): Standard output from the tc command.
-            - 'stderr' (str): Standard error output from the tc command.
-            - 'returncode' (int): The return code of the command (0 for success).
-
-    Note:
-        A safety delay is applied after deleting the qdisc to ensure the system
-        has time to process the changes.
+    :param interface: The network interface name (e.g., ``"eth0"``, ``"enp0s3"``).
+    :type interface: str
+    :return: Command execution result with keys:
+             - ``stdout`` (str): Standard output from the tc command.
+             - ``stderr`` (str): Standard error output from the tc command.
+             - ``returncode`` (int): Return code (0 indicates success).
+    :rtype: Dict[str, Dict[str, str]]
+    :note: A safety delay is applied after deleting the qdisc to allow the
+           system to process changes.
     """
 
     output = show_qdisc(interface)
@@ -402,44 +398,33 @@ def show_tc_egress_filters(interface: str) -> Dict[str, str]:
 def delete_tc_egress_filters(
     interface: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """
-    Delete all configured egress ``tc filters`` for a given interface, or for all interfaces if none is specified.
+    """Delete all configured egress ``tc filters`` for one or all interfaces.
 
-    This helper executes the ``tc filter delete`` command to remove all
-    filters under a given qdisc parent. If no interface is specified, it
-    attempts to clear filters from all available interfaces returned by
-    ``ip link show``.
+    Executes ``tc filter del dev <iface> egress`` to remove egress filters. If
+    ``interface`` is ``None``, discovers all interfaces via ``ip -o link show``
+    and deletes filters for each.
 
-    .. warning::
-       This operation is destructive — it permanently removes all
-       existing tc filter rules. Use with caution.
+    :param interface: Network interface name (e.g., ``"eth0"``). If ``None``,
+                      removes filters on all available interfaces.
+    :type interface: Optional[str]
+    :return: A result dict with ``stdout``, ``stderr``, and ``returncode`` keys
+             when operating on all interfaces; otherwise ``None`` for a single
+             interface.
+    :rtype: Optional[Dict[str, Any]]
+    :warning: This operation is destructive — it permanently removes all
+              existing tc filter rules. Use with caution.
 
-    Parameters
-    ----------
-    interface : Optional[str], optional
-        The name of the network interface (e.g., ``"eth0"``). If ``None``,
-        filters are deleted for all available interfaces.
+    **Examples**
 
-    Returns
-    -------
-    Optional[Dict[str, Any]]
-        A dictionary containing the result of the deletion command with
-        ``stdout``, ``stderr``, and ``returncode`` keys, or ``None`` if
-        a single interface was specified.
+    .. code-block:: python
 
-    Examples
-    --------
-    >>> from tc_command import delete_tc_filters
-    >>> # Delete filters for one interface
-    >>> delete_tc_egress_filters("eth0")
-    🔧 Deleting tc filters for interface: eth0
-    ✅ Successfully deleted filters on eth0 (parent 100:)
+        from tc_command import delete_tc_egress_filters
 
-    >>> # Delete filters for all interfaces
-    >>> delete_tc_egress_filters()
-    🔧 Deleting tc filters on all interfaces...
-    Interface: eth0 -> ✅ Deleted
-    Interface: eth1 -> ⚠️ No filters found
+        # Delete filters for one interface
+        delete_tc_egress_filters("eth0")
+
+        # Delete filters for all interfaces
+        delete_tc_egress_filters()
     """
 
     def _run_cmd(cmd: list) -> str:
