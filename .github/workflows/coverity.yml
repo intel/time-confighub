@@ -1,0 +1,61 @@
+name: Coverity Scan
+
+on: pull_request
+# on:
+#   workflow_dispatch:
+#   schedule:
+#     # Weekly scan (Fridays 09:00 UTC)
+#     - cron: "0 9 * * 5"
+#   push:
+#     branches: [ "main" ]
+
+jobs:
+  coverity:
+    runs-on: ubuntu-latest
+
+    env:
+      COVERITY_PROJECT: "intel/time-confighub"
+      COVERITY_EMAIL: ${{ secrets.COVERITY_SCAN_EMAIL }}
+      COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Coverity Scan tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/coverity
+          curl -fsSL -o /tmp/coverity/cov-analysis.tgz \
+            --data "token=${COVERITY_TOKEN}&project=${COVERITY_PROJECT}" \
+            https://scan.coverity.com/download/linux64
+          tar -C /tmp/coverity -xzf /tmp/coverity/cov-analysis.tgz
+          echo "/tmp/coverity/$(ls -1 /tmp/coverity | grep '^cov-analysis' | head -n1)/bin" >> "$GITHUB_PATH"
+
+      - name: Capture (Coverity CLI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf cov-int
+          # Replacement for deprecated cov-capture:
+          # For uncompiled languages like Python, you can run capture without a build command.
+          coverity capture --dir cov-int --project-dir . --language python
+
+      - name: Package capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf cov-int.tgz cov-int
+
+      - name: Submit to Coverity Scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            --form "token=${COVERITY_TOKEN}" \
+            --form "email=${COVERITY_EMAIL}" \
+            --form "file=@cov-int.tgz" \
+            --form "version=${GITHUB_SHA}" \
+            --form "description=GitHub Actions ${GITHUB_REPOSITORY} ${GITHUB_REF}" \
+            "https://scan.coverity.com/builds?project=${COVERITY_PROJECT}"
