@@ -1,13 +1,12 @@
 name: Coverity Scan
 
-on: pull_request
-# on:
-#   workflow_dispatch:
-#   schedule:
-#     # Weekly scan (Fridays 09:00 UTC)
-#     - cron: "0 9 * * 5"
-#   push:
-#     branches: [ "main" ]
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly scan (Fridays 09:00 UTC)
+    - cron: "0 9 * * 5"
+  push:
+    branches: [ "main" ]
 
 jobs:
   coverity:
