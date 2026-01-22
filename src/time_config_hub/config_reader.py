@@ -17,10 +17,14 @@ or any other configuration management needs.
 
 import logging
 import shutil
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as StdET
 from pathlib import Path
 from typing import Any, Dict, Union
+from xml.etree.ElementTree import Element as XmlElement
+from xml.etree.ElementTree import ElementTree as XmlElementTree
+from xml.etree.ElementTree import SubElement
 
+import defusedxml.cElementTree as SafeET
 import yaml
 
 from .definitions import TCH_APP_CONFIG_FILE
@@ -99,7 +103,6 @@ class ConfigReader:
             )
 
         try:
-
             if file_extension == ".xml":
                 config_data = self._read_xml(config_path)
             else:
@@ -310,11 +313,11 @@ class ConfigReader:
         :raises ConfigError: If XML parsing fails
         """
         try:
-            tree = ET.parse(config_path)
+            tree = SafeET.parse(config_path)
             root = tree.getroot()
             return self._xml_to_dict(root)
 
-        except ET.ParseError as e:
+        except SafeET.ParseError as e:
             logger.error(f"Failed to parse XML file: {config_path}")
             raise ConfigError("Failed to parse XML file") from e
 
@@ -335,23 +338,23 @@ class ConfigReader:
         """
         try:
             # Create root element (use 'configuration' as default root)
-            root = ET.Element("configuration")
+            root = XmlElement("configuration")
             self._dict_to_xml(config_data, root)
 
             # Create tree and write with proper formatting
-            tree = ET.ElementTree(root)
-            ET.indent(tree, space="  ", level=0)  # Format with indentation
+            tree = XmlElementTree(root)
+            StdET.indent(tree, space="  ", level=0)  # Format with indentation
             tree.write(config_path, encoding="utf-8", xml_declaration=True)
 
         except Exception as e:
             logger.exception(f"Unexpected error writing XML file: {config_path}")
             raise ConfigError("Unexpected error writing XML file") from e
 
-    def _xml_to_dict(self, element: ET.Element) -> Any:
+    def _xml_to_dict(self, element: XmlElement) -> Any:
         """
         Convert XML element to dictionary.
 
-        :param ET.Element element: XML element to convert
+        :param XmlElement element: XML element to convert
         :return: Dictionary representation of XML element
         :rtype: Any
         """
@@ -396,13 +399,13 @@ class ConfigReader:
 
         return result
 
-    def _dict_to_xml(self, data: Dict[str, Any], parent: ET.Element) -> None:
+    def _dict_to_xml(self, data: Dict[str, Any], parent: XmlElement) -> None:
         """
         Convert dictionary to XML elements.
 
         :param data: Dictionary data to convert
         :type data: Dict[str, Any]
-        :param ET.Element parent: Parent XML element
+        :param XmlElement parent: Parent XML element
         :return: None
         :rtype: None
         """
@@ -419,18 +422,18 @@ class ConfigReader:
                 if isinstance(value, list):
                     # Handle list values - create multiple elements with same tag
                     for item in value:
-                        child = ET.SubElement(parent, key)
+                        child = SubElement(parent, key)
                         if isinstance(item, dict):
                             self._dict_to_xml(item, child)
                         else:
                             child.text = str(item)
                 elif isinstance(value, dict):
                     # Handle nested dictionaries
-                    child = ET.SubElement(parent, key)
+                    child = SubElement(parent, key)
                     self._dict_to_xml(value, child)
                 else:
                     # Handle simple values
-                    child = ET.SubElement(parent, key)
+                    child = SubElement(parent, key)
                     child.text = str(value)
 
 
