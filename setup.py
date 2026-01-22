@@ -59,6 +59,7 @@ setup(
         "netifaces>=0.11",
         "watchdog>=6.0",
         "colorama>=0.4.6",
+        "defusedxml>=0.7.1",
     ],
     extras_require={
         "dev": [
