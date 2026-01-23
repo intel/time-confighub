@@ -30,6 +30,7 @@ Example
         print(run_tc_command(c))
 """
 
+import shlex
 import socket
 import subprocess
 import time
@@ -145,8 +146,15 @@ def run_tc_command(command: str) -> Dict[str, Any]:
              - ``returncode``: Exit status code (0 means success)
     :rtype: Dict[str, Any]
     """
+    # Use shlex to safely split the command and avoid shell injection
+    full_cmd = ["sudo"] + shlex.split(command)
+
     process = subprocess.run(
-        f"sudo {command}", shell=True, capture_output=True, text=True
+        full_cmd,
+        shell=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
     # Safety delay
