@@ -463,6 +463,7 @@ def load_app_config() -> Dict[str, Any]:
     default_general_config = {
         "Verbosity": False,
         "ConfigDirectory": "/etc/tch/tsn_configs",
+        "YangModuleDirectory": "/etc/tch/yang_modules",
         "ListeningFolder": [],
     }
 

@@ -312,7 +312,7 @@ class GE_Dictionary:
         formatted_entries: List[str] = []
 
         for entry in self.get_gate_control_entries():
-            op = entry.get("operation-name")
+            op = str(entry.get("operation-name", ""))
             # idx = entry.get("index")
             state_val = entry.get("gate-states-value")
             interval = entry.get("time-interval-value")
@@ -321,7 +321,7 @@ class GE_Dictionary:
                 state_val = "0"
             if interval is None:
                 interval = "0"
-            if op == "sched:set-gate-states":
+            if "sched:set-gate-states" in op:
                 # Convert decimal to 2-digit uppercase hex (with leading zero if needed)
                 hex_state = f"{int(state_val):02X}"
                 formatted_entries.append(f"sched-entry S {hex_state} {interval}")
@@ -443,24 +443,24 @@ class GE_Dictionary:
                             latest_tx_offset = None
 
                             # --- End-station interface info ---
-                            end_iface = talker.get("end-station-interfaces", {})
-                            src_mac = end_iface.get("mac-address")
+                            end_iface = list(talker.get("end-station-interfaces", []))
+                            src_mac = end_iface[0].get("mac-address")
                             src_mac = src_mac.replace("-", ":") if src_mac else None
 
                             # --- Interface configuration ---
                             iface_cfg = talker.get("interface-configuration", {})
-                            iface_list = iface_cfg.get("interface-list", {})
+                            iface_list = list(iface_cfg.get("interface-list", []))
 
                             # Interface-level info (mac-address, interface-name)
-                            interface_mac = iface_list.get("mac-address")
+                            interface_mac = iface_list[0].get("mac-address")
                             interface_mac = (
                                 interface_mac.replace("-", ":")
                                 if interface_mac
                                 else None
                             )
-                            interface_name = iface_list.get("interface-name")
+                            interface_name = iface_list[0].get("interface-name")
 
-                            cfg_lists = iface_list.get("config-list", [])
+                            cfg_lists = iface_list[0].get("config-list", [])
                             if not isinstance(cfg_lists, list):
                                 cfg_lists = [cfg_lists]
 

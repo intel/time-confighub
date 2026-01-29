@@ -30,9 +30,10 @@ dependencies = [
     "lxml>=6.0",
     "click>=8.2",
     "netifaces>=0.11",
+    "libyang==4.0.0",
     "watchdog>=6.0",
     "colorama>=0.4.6",
-    "defusedxml>=0.7.1"
+    "defusedxml>=0.7.1",
 ]
 
 [project.optional-dependencies]
