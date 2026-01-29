@@ -8,7 +8,7 @@ concurrency:
 
 jobs:
   code-quality:
-    runs-on: [ tch-v1 ] # temporary run on self host machine, actual shoul be => ubuntu-24.04
+    runs-on: [ ubuntu-latest ]
 
     strategy:
       matrix:
