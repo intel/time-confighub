@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
-from tsn_config_parser import UniversalParser
 from tsn_config_parser.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -30,6 +29,8 @@ from tsn_config_parser.tc_command import (
     show_qdisc,
     show_tc_egress_filters,
 )
+from tsn_config_parser.universal_parser import UniversalParser
+from yang_modules import DEFAULT_YANG_DIR
 
 from .exceptions import TSNConfigError
 
@@ -136,12 +137,22 @@ class TIMEConfigHub:
         :rtype: UniversalParser
         :raises TSNConfigError: If parsing yields no documents
         """
-        uparser = UniversalParser()
-        docs = uparser.parse(config_file)
+        yang_dir = self.app_config.get("General", {}).get(
+            "YangModuleDirectory", DEFAULT_YANG_DIR
+        )
+        uparser = UniversalParser(yang_dir)
+        ftype = self._get_file_extension(config_file)
+        docs = uparser.parse(fpath=config_file, ftype=ftype)
         if not docs:
-            raise TSNConfigError("No valid configuration documents found.")
+            raise TSNConfigError(
+                f"No valid configuration documents found in {yang_dir}"
+            )
 
         return uparser
+
+    def _get_file_extension(self, file_path: str) -> str:
+        """Get the file extension from a file path."""
+        return Path(file_path).suffix.lower().lstrip(".")
 
     def _reset_interfaces(self, interfaces: List[str]) -> None:
         """Reset qdisc and filters for a list of interfaces."""

@@ -17,6 +17,7 @@ readonly APP_CONFIG_SUBDIR_NAME="app_config"
 readonly APP_CONFIG_DIR="${APP_INSTALL_DIR}/${APP_CONFIG_SUBDIR_NAME}"
 
 readonly DEFAULT_CONFIG_DIR="${APP_INSTALL_DIR}/tsn_configs"
+readonly DEFAULT_YANG_DIR="${APP_INSTALL_DIR}/yang_modules"
 readonly DEFAULT_LOG_DIR="/var/log/tch"
 
 readonly PROJECT_CONFIG_FILE="conf/tch_app.conf"
@@ -82,12 +83,35 @@ create_directory_structure() {
     mkdir -p "${CONFIG_DIR}"              # TSN traffic configuration files
     mkdir -p "${LOG_DIR}"                 # Application logs
     mkdir -p "${APP_VENV_BASE_DIR}"       # Python virtual environment base
+    mkdir -p "${DEFAULT_YANG_DIR}"        # YANG modules directory
     
     echo "✓ Directory structure created:"
     echo "  - Application config: ${APP_CONFIG_DIR}"
     echo "  - TSN config: ${CONFIG_DIR}"
+    echo "  - YANG modules: ${DEFAULT_YANG_DIR}"
     echo "  - Logs: ${LOG_DIR}"
     echo "  - Python venv base: ${APP_VENV_BASE_DIR}"
+}
+
+export_venv_env_vars() {
+    local activate_file="${VENV_DIR}/bin/activate"
+    local marker="# Auto-injected by install.sh for TCH build/runtime"
+    local exports_block=$(cat <<EOF
+# Auto-injected by install.sh for TCH build/runtime
+export CPATH=/usr/local/include
+export LIBRARY_PATH=/usr/local/lib
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+EOF
+)
+
+    if [[ ! -f "${activate_file}" ]]; then
+        echo "Warning: activate script not found at ${activate_file}"
+        return
+    fi
+
+    if ! grep -Fq "${marker}" "${activate_file}"; then
+        printf "\n%s\n" "${exports_block}" >> "${activate_file}"
+    fi
 }
 
 # Function to create Python virtual environment
@@ -110,6 +134,8 @@ create_python_venv() {
         echo "On Debian/Ubuntu you likely need: apt install python3-venv"
         exit 1
     fi
+
+    export_venv_env_vars
 
     echo "✓ Virtual environment created: ${VENV_DIR}"
 }
@@ -139,6 +165,9 @@ install_python_package() {
     # Build wheel from project and install it into the venv
     "${VENV_DIR}/bin/python" -m build
     "${VENV_DIR}/bin/python" -m pip install --upgrade dist/*.whl
+
+    # Copy YANG modules to /etc/tch for runtime lookup
+    cp -r src/yang_modules/* "${DEFAULT_YANG_DIR}/"
 
     # Expose a stable CLI path for users
     mkdir -p "$(dirname "${TCH_SYMLINK_PATH}")"
