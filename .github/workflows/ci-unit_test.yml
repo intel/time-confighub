@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    runs-on: [ tch-v1 ] # temporary run on self host machine, actual shoul be => ubuntu-24.04
+    runs-on: [ ubuntu-latest ]
 
     # Only run tests when the code-quality workflow passed.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
