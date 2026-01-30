@@ -33,10 +33,29 @@ The Time Config Hub is designed to run on end stations equipped with TSN-capable
 - Network interfaces with TSN capabilities
 - Bash shell (for TSN Reference Software compatibility)
 - systemd (for daemon mode)
+- libyang (for configuration parsing and validation)
+
+
 
 ## Installation
 
+### Dependency: Building libyang from source (Ubuntu)
+
+```bash
+sudo apt install python3-dev gcc python3-cffi
+git clone https://github.com/CESNET/libyang.git
+cd libyang
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+sudo ldconfig /usr/local/lib
+```
+
 ### Quick Install (Recommended)
+
+
 
 ```bash
 cd <repo-root>
