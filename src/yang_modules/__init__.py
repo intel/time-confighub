@@ -4,9 +4,6 @@ This package provides helper functions to locate and load YANG modules, enabling
 all features on successfully loaded modules.
 """
 
-import os
-from typing import Optional
-
 import libyang
 
 # Centralized source of truth for the default YANG module directory
