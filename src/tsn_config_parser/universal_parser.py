@@ -6,9 +6,9 @@ XML and JSON Parser using libyang for YANG-modeled configuration data.
 import io
 import json
 import os
-import sys
 import xml.etree.ElementTree as StdET
-from typing import Any, Dict, List, Optional, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Union
 
 import defusedxml.ElementTree as SafeET
 import libyang
@@ -17,97 +17,58 @@ from tsn_config_parser.GE_dictionary import GE_Dictionary
 from yang_modules import DEFAULT_YANG_DIR, load_yang_module
 
 
+def _collect_json_prefixes(
+    node: Any, keywords: List[str], collection: Set[str]
+) -> None:
+    """Recursively collect YANG module prefixes from JSON content."""
+
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str) and ":" in key:
+                prefix = key.split(":")[0]
+                if any(kw in prefix.lower() for kw in keywords):
+                    collection.add(prefix)
+            _collect_json_prefixes(value, keywords, collection)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_json_prefixes(item, keywords, collection)
+    elif isinstance(node, str) and ":" in node:
+        prefix = node.split(":")[0]
+        if any(kw in prefix.lower() for kw in keywords):
+            collection.add(prefix)
+
+
 class UniversalParser:
     """Parser that leverages libyang to parse and validate YANG-modeled data (XML/JSON)."""
 
-    def __init__(self, search_path: Optional[str] = None):
+    def __init__(self, yang_modules_path: Optional[str] = None):
         """Initialize the libyang context.
 
-        :param str search_path: Optional path to YANG modules. Defaults to DEFAULT_YANG_DIR.
+        :param str yang_modules_path: Optional path to YANG modules. Defaults to DEFAULT_YANG_DIR.
         """
-        if search_path is None:
-            search_path = DEFAULT_YANG_DIR
+        if yang_modules_path is None:
+            yang_modules_path = DEFAULT_YANG_DIR
 
         # Initialize context with search path for automatic dependency resolution
-        self.ctx = libyang.Context(search_path)
+        self.ctx = libyang.Context(yang_modules_path)
         self.documents: List[Dict[str, Any]] = []
 
-    def _extract_required_modules(self, fpath: str, ftype: str) -> List[str]:
-        """Scan the file to identify potential YANG module names.
-
-        For XML, it extracts module names from namespace URIs (the last component
-        of the colon-delimited string). For JSON, it extracts module prefixes
-        from top-level keys (RFC 7951 format).
-
-        :param str fpath: The path to the file to scan
-        :param str ftype: The type of file ('xml' or 'json')
-        :return: A list of discovered module names
-        :rtype: List[str]
-        """
-        req_modules = set()
-        ftype = ftype.lower()
-
-        if ftype == "xml":
-            try:
-                # Wrap in dummy root to handle siblings, similar to _xml_multi_root_handler
-                with open(fpath, "rb") as f:
-                    raw_content = f.read()
-                wrapped = b"<root>" + raw_content + b"</root>"
-                for _, (_, uri) in SafeET.iterparse(
-                    io.BytesIO(wrapped), events=("start-ns",)
-                ):
-                    # Standard YANG namespaces often end with the module name
-                    # e.g., urn:ietf:params:xml:ns:yang:ietf-interfaces
-                    module = uri.split(":")[-1]
-                    req_modules.add(module)
-            except SafeET.ParseError:
-                pass
-        elif ftype == "json":
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                def _walk_json(node: Any) -> None:
-                    """Recursively find module prefixes in keys and identityrefs."""
-                    keywords = ["ietf", "ieee", "iana"]
-                    if isinstance(node, dict):
-                        for k, v in node.items():
-                            if isinstance(k, str) and ":" in k:
-                                prefix = k.split(":")[0]
-                                if any(kw in prefix.lower() for kw in keywords):
-                                    req_modules.add(prefix)
-                            _walk_json(v)
-                    elif isinstance(node, list):
-                        for item in node:
-                            _walk_json(item)
-                    elif isinstance(node, str) and ":" in node:
-                        # Capture identityrefs like 'iana-if-type:ethernetCsmacd'
-                        prefix = node.split(":")[0]
-                        if any(kw in prefix.lower() for kw in keywords):
-                            req_modules.add(prefix)
-
-                _walk_json(data)
-            except json.JSONDecodeError:
-                pass
-
-        return list(req_modules)
-
-    def _json_multi_root_handler(self, fpath: str) -> List[str]:
+    def _json_multi_root_handler(self, file_path: str) -> List[str]:
         """Extract top-level JSON config_blocks.
 
         If the file contains a JSON array of objects, each object is treated
         as a separate config_block for parsing.
 
-        :param str fpath: The path to the JSON file to split
+        :param str file_path: The path to the JSON file to split
         :return: A list of JSON strings for each top-level config_block
         :rtype: List[str]
         :raises FileNotFoundError: If the file does not exist
         """
-        if not os.path.exists(fpath):
-            raise FileNotFoundError(f"Configuration file not found: {fpath}")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
         try:
-            with open(fpath, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = json.load(f)
 
             if isinstance(content, list):
@@ -116,24 +77,24 @@ class UniversalParser:
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to decode JSON file: {e}") from e
 
-    def _xml_multi_root_handler(self, fpath: str) -> List[str]:
+    def _xml_multi_root_handler(self, file_path: str) -> List[str]:
         """Extract top-level XML config_blocks and preserve namespaces for fragments.
 
         This method handles multi-root XML files by wrapping them in a temporary
         parent and re-applying all document namespaces to each fragment. This
         is necessary for libyang to resolve identityrefs in text nodes.
 
-        :param str fpath: The path to the XML file to split
+        :param str file_path: The path to the XML file to split
         :return: A list of XML strings for each top-level config_block
         :rtype: List[str]
         :raises FileNotFoundError: If the file does not exist
         :raises libyang.LibyangError: If XML pre-processing fails
         """
-        if not os.path.exists(fpath):
-            raise FileNotFoundError(f"Configuration file not found: {fpath}")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
         try:
-            with open(fpath, "rb") as f:
+            with open(file_path, "rb") as f:
                 raw_content = f.read()
 
             # Wrap fragment in a dummy root to handle multiple top-level siblings
@@ -217,20 +178,20 @@ class UniversalParser:
         return dnode.print_dict() if dnode else None
 
     def _extract_required_modules_from_block(
-        self, block_content: str, ftype: str
+        self, block_content: str, file_type: str
     ) -> List[str]:
         """Extract YANG module prefixes from a single config_block string.
 
         :param str block_content: The raw XML/JSON block content
-        :param str ftype: The content type ('xml' or 'json')
+        :param str file_type: The content type ('xml' or 'json')
         :return: A list of discovered module prefixes
         :rtype: List[str]
         """
         req_modules = set()
         keywords = ["ietf", "ieee", "iana"]
-        ftype = ftype.lower()
+        file_type = file_type.lower()
 
-        if ftype == "xml":
+        if file_type == "xml":
             try:
                 for _, (_, uri) in SafeET.iterparse(
                     io.BytesIO(block_content.encode("utf-8")), events=("start-ns",)
@@ -240,27 +201,10 @@ class UniversalParser:
                         req_modules.add(module)
             except SafeET.ParseError:
                 pass
-        elif ftype == "json":
+        elif file_type == "json":
             try:
                 data = json.loads(block_content)
-
-                def _walk(node: Any) -> None:
-                    if isinstance(node, dict):
-                        for k, v in node.items():
-                            if isinstance(k, str) and ":" in k:
-                                prefix = k.split(":")[0]
-                                if any(kw in prefix.lower() for kw in keywords):
-                                    req_modules.add(prefix)
-                            _walk(v)
-                    elif isinstance(node, list):
-                        for item in node:
-                            _walk(item)
-                    elif isinstance(node, str) and ":" in node:
-                        prefix = node.split(":")[0]
-                        if any(kw in prefix.lower() for kw in keywords):
-                            req_modules.add(prefix)
-
-                _walk(data)
+                _collect_json_prefixes(data, keywords, req_modules)
             except json.JSONDecodeError:
                 pass
 
@@ -268,8 +212,8 @@ class UniversalParser:
 
     def parse(
         self,
-        fpath: str,
-        ftype: str = "xml",
+        file_path: str,
+        file_type: str = "auto",
         no_state: Union[bool, str] = "auto",
     ) -> List[Dict[str, Any]]:
         """Parse a configuration file into a list of dictionaries using libyang.
@@ -277,31 +221,38 @@ class UniversalParser:
         This method now splits the file into config_blocks first, then detects
         and loads required YANG modules from those blocks before validation.
 
-        :param str fpath: The path to the file to parse
-        :param str ftype: The type of file to parse ("xml" or "json")
+        :param str file_path: The path to the file to parse
+        :param str file_type: The type of file to parse ("xml", "json", or "auto")
         :param Union[bool, str] no_state: Validation mode. Use True to ignore
             mandatory state nodes, False to enforce them, or "auto" to attempt
             enforcement first.
         :return: A list containing the parsed dictionary representation
         :rtype: List[Dict[str, Any]]
-        :raises FileNotFoundError: If the fpath does not exist
+        :raises FileNotFoundError: If the file_path does not exist
         :raises libyang.LibyangError: If any config_block fails validation
-        :raises ValueError: If an unsupported ftype is provided
+        :raises ValueError: If an unsupported file_type is provided
         """
         self.documents = []
-        ftype = ftype.lower()
+        file_type = (file_type or "auto").lower()
+
+        # Determine file type based on extension if set to auto
+        if file_type == "auto":
+            suffix = Path(file_path).suffix.lower()
+            file_type = "json" if suffix == ".json" else "xml"
 
         # Split multi-root files into individual config_blocks first
-        if ftype == "xml":
-            config_blocks = self._xml_multi_root_handler(fpath)
-        elif ftype == "json":
-            config_blocks = self._json_multi_root_handler(fpath)
+        if file_type == "xml":
+            config_blocks = self._xml_multi_root_handler(file_path)
+        elif file_type == "json":
+            config_blocks = self._json_multi_root_handler(file_path)
         else:
-            raise ValueError(f"Unsupported file type: {ftype}")
+            raise ValueError(f"Unsupported file type: {file_type}")
         # Extract and load required modules from the blocks
         req_modules = set()
         for block in config_blocks:
-            req_modules.update(self._extract_required_modules_from_block(block, ftype))
+            req_modules.update(
+                self._extract_required_modules_from_block(block, file_type)
+            )
 
         for module in req_modules:
             try:
@@ -313,13 +264,13 @@ class UniversalParser:
         for config_block in config_blocks:
             try:
                 parsed_doc = self._parse_libyang_block(
-                    config_block, data_format=ftype, no_state=no_state
+                    config_block, data_format=file_type, no_state=no_state
                 )
                 if parsed_doc:
                     self.documents.append(parsed_doc)
             except libyang.LibyangError as e:
                 raise libyang.LibyangError(
-                    f"Validation failed for {ftype.upper()} config_block: {e}"
+                    f"Validation failed for {file_type.upper()} config_block: {e}"
                 )
 
         return self.documents
@@ -352,13 +303,13 @@ class UniversalParser:
             return any(self._contains_chronos(item) for item in node)
         return False
 
-    def refresh(self, fpath: str, ftype: str = "xml"):
+    def refresh(self, file_path: str, file_type: str = "xml"):
         """
         Re-parse a file, refreshing the cached documents.
 
         :param file_path: Path to the file
         """
-        return self.parse(fpath, ftype=ftype)
+        return self.parse(file_path, file_type=file_type)
 
     def get_dictionary_helper(self):
         """
@@ -369,33 +320,3 @@ class UniversalParser:
         if self.has_chronos_domain():
             return GE_Dictionary(self.documents)
         return None
-
-
-# -----------------------------
-# CLI entry point
-# -----------------------------
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python universal_parser.py <path-to-file> [xml|json]")
-        sys.exit(1)
-
-    file_path = sys.argv[1]
-    # Simple check for file type from extension if not provided
-    INFERRED_FILE_TYPE = "json" if file_path.endswith(".json") else "xml"
-    file_type = sys.argv[2] if len(sys.argv) > 2 else INFERRED_FILE_TYPE
-
-    parser = UniversalParser()
-    try:
-        docs = parser.parse(file_path, ftype=file_type)
-    except libyang.LibyangError as e:
-        print(f"❌ libyang Parse/Validation Error: {e}")
-        sys.exit(1)
-
-    print(f"✅ Parsed {len(docs)} document(s) from {file_path}")
-    for i, doc in enumerate(docs, 1):
-        print(f"\nDocument #{i}:\n{doc}")
-
-    if parser.has_chronos_domain():
-        print("\n🔍 chronos-domain detected in file!")
-    else:
-        print("\n❌ chronos-domain not found")

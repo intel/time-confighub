@@ -141,18 +141,13 @@ class TIMEConfigHub:
             "YangModuleDirectory", DEFAULT_YANG_DIR
         )
         uparser = UniversalParser(yang_dir)
-        ftype = self._get_file_extension(config_file)
-        docs = uparser.parse(fpath=config_file, ftype=ftype)
+        docs = uparser.parse(file_path=config_file, file_type="auto")
         if not docs:
             raise TSNConfigError(
                 f"No valid configuration documents found in {yang_dir}"
             )
 
         return uparser
-
-    def _get_file_extension(self, file_path: str) -> str:
-        """Get the file extension from a file path."""
-        return Path(file_path).suffix.lower().lstrip(".")
 
     def _reset_interfaces(self, interfaces: List[str]) -> None:
         """Reset qdisc and filters for a list of interfaces."""

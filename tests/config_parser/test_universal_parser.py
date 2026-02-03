@@ -110,35 +110,9 @@ def test_init_uses_default_search_path(up_module):
 def test_init_accepts_custom_search_path(up_module):
     """Custom search path is respected when provided."""
     custom_path = "/tmp/custom_yang"
-    parser = up_module.UniversalParser(search_path=custom_path)
+    parser = up_module.UniversalParser(yang_modules_path=custom_path)
 
     assert parser.ctx.search_path == custom_path
-
-
-def test_extract_required_modules_xml(tmp_path, up_module):
-    """Modules are discovered from XML namespaces."""
-    xml_content = (
-        '<interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">'
-        "</interfaces>"
-    )
-    xml_file = tmp_path / "sample.xml"
-    xml_file.write_text(xml_content, encoding="utf-8")
-
-    parser = up_module.UniversalParser()
-    modules = parser._extract_required_modules(str(xml_file), "xml")
-
-    assert "ietf-interfaces" in modules
-
-
-def test_extract_required_modules_invalid_json_returns_empty(tmp_path, up_module):
-    """Invalid JSON yields an empty module list."""
-    bad_json = tmp_path / "broken.json"
-    bad_json.write_text("{this-is:not-json}", encoding="utf-8")
-
-    parser = up_module.UniversalParser()
-    modules = parser._extract_required_modules(str(bad_json), "json")
-
-    assert modules == []
 
 
 def test_json_multi_root_handler_splits_array(tmp_path, up_module):
@@ -290,7 +264,7 @@ def test_parse_xml_happy_path(monkeypatch, up_module):
         or {block: True},
     )
 
-    docs = parser.parse("dummy.xml", ftype="xml")
+    docs = parser.parse("dummy.xml", file_type="xml")
 
     assert docs == [{"<a/>": True}, {"<b/>": True}]
     assert set(load_calls) == {"good", "bad"}
@@ -310,7 +284,7 @@ def test_parse_json_branch(monkeypatch, up_module):
         lambda block, data_format, no_state: {"parsed": data_format},
     )
 
-    docs = parser.parse("dummy.json", ftype="json", no_state=False)
+    docs = parser.parse("dummy.json", file_type="json", no_state=False)
 
     assert docs == [{"parsed": "json"}]
 
@@ -320,7 +294,7 @@ def test_parse_unsupported_type_raises(up_module):
     parser = up_module.UniversalParser()
 
     with pytest.raises(ValueError):
-        parser.parse("file.yaml", ftype="yaml")
+        parser.parse("file.yaml", file_type="yaml")
 
 
 def test_parse_propagates_validation_error(monkeypatch, up_module):
@@ -337,7 +311,7 @@ def test_parse_propagates_validation_error(monkeypatch, up_module):
     monkeypatch.setattr(parser, "_parse_libyang_block", raise_error)
 
     with pytest.raises(up_module.libyang.LibyangError):
-        parser.parse("dummy.xml", ftype="xml")
+        parser.parse("dummy.xml", file_type="xml")
 
 
 def test_has_chronos_domain_detects_presence(up_module):
@@ -380,14 +354,14 @@ def test_refresh_calls_parse(monkeypatch, up_module):
     parser = up_module.UniversalParser()
     called = {}
 
-    def fake_parse(path, ftype="xml"):
+    def fake_parse(path, file_type="xml"):
         called["path"] = path
-        called["ftype"] = ftype
+        called["ftype"] = file_type
         return ["refreshed"]
 
     monkeypatch.setattr(parser, "parse", fake_parse)
 
-    result = parser.refresh("config.xml", ftype="json")
+    result = parser.refresh("config.xml", file_type="json")
 
     assert result == ["refreshed"]
     assert called == {"path": "config.xml", "ftype": "json"}
