@@ -17,25 +17,34 @@ from tsn_config_parser.GE_dictionary import GE_Dictionary
 from yang_modules import DEFAULT_YANG_DIR, load_yang_module
 
 
-def _collect_json_prefixes(
-    node: Any, keywords: List[str], collection: Set[str]
-) -> None:
-    """Recursively collect YANG module prefixes from JSON content."""
+def _collect_json_prefixes(node: Any, keywords: List[str]) -> Set[str]:
+    """Recursively collect and return YANG module prefixes from JSON content."""
+    prefixes = set()
+    keywords_lower = [kw.lower() for kw in keywords]
 
     if isinstance(node, dict):
         for key, value in node.items():
+            # Check the key for a prefix
             if isinstance(key, str) and ":" in key:
                 prefix = key.split(":")[0]
-                if any(kw in prefix.lower() for kw in keywords):
-                    collection.add(prefix)
-            _collect_json_prefixes(value, keywords, collection)
+                if any(kw in prefix.lower() for kw in keywords_lower):
+                    prefixes.add(prefix)
+
+            # Recurse and merge results from values
+            prefixes |= _collect_json_prefixes(value, keywords)
+
     elif isinstance(node, list):
         for item in node:
-            _collect_json_prefixes(item, keywords, collection)
+            # Recurse and merge results from list items
+            prefixes |= _collect_json_prefixes(item, keywords)
+
     elif isinstance(node, str) and ":" in node:
+        # Check leaf string values for prefixes
         prefix = node.split(":")[0]
-        if any(kw in prefix.lower() for kw in keywords):
-            collection.add(prefix)
+        if any(kw in prefix.lower() for kw in keywords_lower):
+            prefixes.add(prefix)
+
+    return prefixes
 
 
 class UniversalParser:
@@ -131,21 +140,34 @@ class UniversalParser:
         self,
         block_content: str,
         data_format: str = "xml",
-        no_state: Union[bool, str] = "auto",
+        no_state: str = "auto",
     ) -> Optional[Dict[str, Any]]:
         """Parse a single data config_block using libyang with configurable state validation.
 
         :param str block_content: The XML or JSON string content to parse
         :param str data_format: The format of the content ("xml" or "json")
-        :param Union[bool, str] no_state: Validation mode. Use True to ignore
-            mandatory state nodes, False to enforce them, or "auto" to attempt
-            enforcement first.
+        :param str no_state: Validation mode. Use
+            - "ignore" to ignore mandatory state nodes
+            - "enforce" to enforce them
+            - "auto" to attempt enforcement first.
         :return: Dictionary representation of the config_block, or None
         :rtype: Optional[Dict[str, Any]]
         :raises libyang.LibyangError: If validation fails in the selected mode
         """
         is_json = data_format.lower() == "json"
         is_auto = isinstance(no_state, str) and no_state.lower() == "auto"
+
+        if no_state not in ["auto", "ignore", "enforce"]:
+            raise ValueError(
+                f"Invalid no_state value: {no_state}. Must be 'auto', 'ignore', or 'enforce'."
+            )
+
+        no_state_bool = False  # standard enforcement by default
+
+        if no_state == "ignore":
+            no_state_bool = True
+        elif no_state == "enforce":
+            no_state_bool = False
 
         if is_auto:
             try:
@@ -171,7 +193,7 @@ class UniversalParser:
                 block_content,
                 data_format,
                 validate_present=True,
-                no_state=bool(no_state),
+                no_state=no_state_bool,
                 json_string_datatypes=is_json,
             )
 
@@ -204,7 +226,7 @@ class UniversalParser:
         elif file_type == "json":
             try:
                 data = json.loads(block_content)
-                _collect_json_prefixes(data, keywords, req_modules)
+                req_modules = _collect_json_prefixes(data, keywords)
             except json.JSONDecodeError:
                 pass
 
@@ -214,7 +236,7 @@ class UniversalParser:
         self,
         file_path: str,
         file_type: str = "auto",
-        no_state: Union[bool, str] = "auto",
+        no_state: str = "auto",
     ) -> List[Dict[str, Any]]:
         """Parse a configuration file into a list of dictionaries using libyang.
 
@@ -223,9 +245,10 @@ class UniversalParser:
 
         :param str file_path: The path to the file to parse
         :param str file_type: The type of file to parse ("xml", "json", or "auto")
-        :param Union[bool, str] no_state: Validation mode. Use True to ignore
-            mandatory state nodes, False to enforce them, or "auto" to attempt
-            enforcement first.
+        :param str no_state: Validation mode. Use
+            - "ignore" to ignore mandatory state nodes
+            - "enforce" to enforce them
+            - "auto" to attempt enforcement first.
         :return: A list containing the parsed dictionary representation
         :rtype: List[Dict[str, Any]]
         :raises FileNotFoundError: If the file_path does not exist

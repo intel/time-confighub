@@ -284,7 +284,7 @@ def test_parse_json_branch(monkeypatch, up_module):
         lambda block, data_format, no_state: {"parsed": data_format},
     )
 
-    docs = parser.parse("dummy.json", file_type="json", no_state=False)
+    docs = parser.parse("dummy.json", file_type="json", no_state="ignore")
 
     assert docs == [{"parsed": "json"}]
 
