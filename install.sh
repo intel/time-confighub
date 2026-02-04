@@ -93,27 +93,6 @@ create_directory_structure() {
     echo "  - Python venv base: ${APP_VENV_BASE_DIR}"
 }
 
-export_venv_env_vars() {
-    local activate_file="${VENV_DIR}/bin/activate"
-    local marker="# Auto-injected by install.sh for TCH build/runtime"
-    local exports_block=$(cat <<EOF
-# Auto-injected by install.sh for TCH build/runtime
-export CPATH=/usr/local/include
-export LIBRARY_PATH=/usr/local/lib
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-EOF
-)
-
-    if [[ ! -f "${activate_file}" ]]; then
-        echo "Warning: activate script not found at ${activate_file}"
-        return
-    fi
-
-    if ! grep -Fq "${marker}" "${activate_file}"; then
-        printf "\n%s\n" "${exports_block}" >> "${activate_file}"
-    fi
-}
-
 # Function to create Python virtual environment
 create_python_venv() {
     echo "Creating Python virtual environment..."
@@ -135,8 +114,6 @@ create_python_venv() {
         exit 1
     fi
 
-    export_venv_env_vars
-
     echo "✓ Virtual environment created: ${VENV_DIR}"
 }
 
@@ -150,6 +127,24 @@ copy_configuration_files() {
     else
         echo "Warning: conf/ directory not found, no config files to copy"
     fi
+}
+
+# Function to check for required dependencies
+check_dependencies() {
+    echo "Checking for required dependencies..."
+    check_libyang_installed
+}
+
+check_libyang_installed() {
+    if ! command -v yanglint &> /dev/null; then
+        echo "Error: yanglint not found. Please install libyang first."
+        echo "Refer to README.md for installation instructions."
+        exit 1
+    fi
+
+    local yanglint_version
+    yanglint_version=$(yanglint --version 2>/dev/null | head -n 1)
+    echo "✓ libyang detected via yanglint (${yanglint_version})"
 }
 
 # Function to install Python package
@@ -261,6 +256,9 @@ main() {
     echo ""
     
     copy_configuration_files
+    echo ""
+
+    check_dependencies
     echo ""
     
     install_python_package
