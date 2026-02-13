@@ -129,10 +129,10 @@ def test_json_multi_root_handler_splits_array(tmp_path, up_module):
 
 
 def test_json_multi_root_handler_missing_file_raises(up_module):
-    """Missing JSON files raise FileNotFoundError."""
+    """Missing JSON files raise InvalidFileError."""
     parser = up_module.UniversalParser()
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(up_module.InvalidFileError):
         parser._json_multi_root_handler("/nonexistent/file.json")
 
 
@@ -156,13 +156,13 @@ def test_xml_multi_root_handler_preserves_namespaces(tmp_path, up_module):
 
 
 def test_xml_multi_root_handler_invalid_xml_raises(tmp_path, up_module):
-    """Malformed XML surfaces as a libyang preprocessing error."""
+    """Malformed XML surfaces as a parser preprocessing error."""
     xml_file = tmp_path / "bad.xml"
     xml_file.write_text("<interfaces><name>eth0", encoding="utf-8")
 
     parser = up_module.UniversalParser()
 
-    with pytest.raises(up_module.libyang.LibyangError):
+    with pytest.raises(up_module.InvalidFileError):
         parser._xml_multi_root_handler(str(xml_file))
 
 
@@ -184,7 +184,7 @@ def test_parse_libyang_block_auto_recovers(monkeypatch, up_module):
 
 
 def test_parse_libyang_block_propagates_failure(up_module):
-    """Raise libyang errors when parsing fails consistently."""
+    """Raise parser errors when validation fails consistently."""
     parser = up_module.UniversalParser()
 
     def always_fail(*args, **kwargs):
@@ -192,7 +192,7 @@ def test_parse_libyang_block_propagates_failure(up_module):
 
     parser.ctx.parse_data_mem_behavior = always_fail
 
-    with pytest.raises(up_module.libyang.LibyangError):
+    with pytest.raises(up_module.UniversalParserError):
         parser._parse_libyang_block("<data/>", data_format="xml", no_state="auto")
 
 
@@ -290,10 +290,10 @@ def test_parse_json_branch(monkeypatch, up_module):
 
 
 def test_parse_unsupported_type_raises(up_module):
-    """Unsupported file extensions raise ValueError."""
+    """Unsupported file extensions raise InvalidFileError."""
     parser = up_module.UniversalParser()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(up_module.InvalidFileError):
         parser.parse("file.yaml", file_type="yaml")
 
 
@@ -306,11 +306,11 @@ def test_parse_propagates_validation_error(monkeypatch, up_module):
     )
 
     def raise_error(*args, **kwargs):
-        raise up_module.libyang.LibyangError("fail")
+        raise up_module.UniversalParserError("fail")
 
     monkeypatch.setattr(parser, "_parse_libyang_block", raise_error)
 
-    with pytest.raises(up_module.libyang.LibyangError):
+    with pytest.raises(up_module.UniversalParserError):
         parser.parse("dummy.xml", file_type="xml")
 
 

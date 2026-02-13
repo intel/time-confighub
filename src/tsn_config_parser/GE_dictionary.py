@@ -30,6 +30,10 @@ class GE_Dictionary:
                             names.append(name_entry["#text"])
                         else:
                             names.append(str(name_entry))
+
+        if not names:
+            raise ValueError("No interface name found in configuration file.")
+
         return names
 
     def get_stream_ids(self) -> List[str]:
@@ -43,6 +47,10 @@ class GE_Dictionary:
                     for s in streams
                 ]
             )
+
+        if not stream_ids:
+            raise ValueError("No stream ID found in configuration file.")
+
         return stream_ids
 
     def get_talker_vlan_info(self) -> Dict[str, List[Dict[str, str]]]:
@@ -304,6 +312,9 @@ class GE_Dictionary:
                 if not isinstance(gate_entries, list):
                     gate_entries = [gate_entries]
                 entries.extend(gate_entries)
+
+        if not entries:
+            raise ValueError("No gate-control-entry found in configuration file.")
 
         return entries
 
