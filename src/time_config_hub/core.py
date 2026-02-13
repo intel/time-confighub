@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
+from tsn_config_parser.exceptions import InvalidFileError, UniversalParserError
 from tsn_config_parser.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -135,16 +136,26 @@ class TIMEConfigHub:
         :param str config_file: Path to configuration file (XML or YAML)
         :return: UniversalParser instance
         :rtype: UniversalParser
-        :raises TSNConfigError: If parsing yields no documents
+        :raises TSNConfigError: If parsing fails or yields no documents
         """
         yang_dir = self.app_config.get("General", {}).get(
             "YangModuleDirectory", DEFAULT_YANG_DIR
         )
         uparser = UniversalParser(yang_dir)
-        docs = uparser.parse(file_path=config_file, file_type="auto")
+        try:
+            docs = uparser.parse(file_path=config_file, file_type="auto")
+        except InvalidFileError as exc:
+            raise TSNConfigError(
+                f"Invalid configuration file {config_file}: {exc}"
+            ) from exc
+        except UniversalParserError as exc:
+            raise TSNConfigError(
+                f"Failed to parse configuration {config_file}: {exc}"
+            ) from exc
+
         if not docs:
             raise TSNConfigError(
-                f"No valid configuration documents found in {yang_dir}"
+                f"No valid configuration documents found in {config_file}"
             )
 
         return uparser
@@ -417,6 +428,9 @@ class TIMEConfigHub:
 
             except TSNConfigError:
                 logger.error(f"Error handling file event {event_type}: {file_path}")
+
+            except UniversalParserError:
+                logger.error(f"Parsing error for file event {event_type}: {file_path}")
 
             except Exception:
                 logger.exception(f"Error handling file event {event_type}: {file_path}")
