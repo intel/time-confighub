@@ -17,6 +17,7 @@ with proper error handling and logging capabilities.
 
 import json
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -46,14 +47,15 @@ def cli():
     """
     ctx = click.get_current_context()
 
-    # Load configuration from file
+    # Optional: allow help/version without root
+    if ctx.invoked_subcommand not in (None,):
+        if os.geteuid() != 0:
+            click.echo("✗ This command requires sudo/root", err=True)
+            raise SystemExit(TchExitCode.USER_INPUT_ERROR)
+
     app_config = load_app_config()
-
-    # Setup logging based on configuration and CLI options
     setup_logging(app_config)
-
     ctx.ensure_object(dict)
-    # TODO: Convert to data class for better type safety
     ctx.obj["app_config"] = app_config
 
 
