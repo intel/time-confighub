@@ -147,8 +147,7 @@ def run_tc_command(command: str) -> Dict[str, Any]:
     :rtype: Dict[str, Any]
     """
     # Use shlex to safely split the command and avoid shell injection
-    full_cmd = ["sudo"] + shlex.split(command)
-
+    full_cmd = shlex.split(command)
     process = subprocess.run(
         full_cmd,
         shell=False,
@@ -346,7 +345,7 @@ def show_qdisc(interface: str) -> Dict[str, str]:
     """
     Show the qdisc configuration of a given interface.
 
-    This runs ``sudo tc qdisc show dev <interface>`` and returns the result.
+    This runs ``tc qdisc show dev <interface>`` and returns the result.
 
     :param interface: The network interface to inspect (e.g., ``"enp170s0"``).
     :type interface: str
