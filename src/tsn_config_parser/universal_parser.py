@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 import defusedxml.ElementTree as SafeET
 import libyang
 
-from tsn_config_parser.exceptions import InvalidFileError, UniversalParserError
+from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
 from tsn_config_parser.GE_dictionary import GE_Dictionary
 from yang_modules import DEFAULT_YANG_DIR, load_yang_module
 
@@ -72,10 +72,10 @@ class UniversalParser:
         :param str file_path: The path to the JSON file to split
         :return: A list of JSON strings for each top-level config_block
         :rtype: List[str]
-        :raises InvalidFileError: If the file does not exist or cannot be decoded
+        :raises InvalidInputDataError : If the file does not exist or cannot be decoded
         """
         if not os.path.exists(file_path):
-            raise InvalidFileError(f"Configuration file not found: {file_path}")
+            raise InvalidInputDataError(f"Configuration file not found: {file_path}")
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -85,7 +85,7 @@ class UniversalParser:
                 return [json.dumps(item) for item in content]
             return [json.dumps(content)]
         except json.JSONDecodeError as e:
-            raise InvalidFileError(f"Failed to decode JSON file: {e}") from e
+            raise InvalidInputDataError(f"Failed to decode JSON file: {e}") from e
 
     def _xml_multi_root_handler(self, file_path: str) -> List[str]:
         """Extract top-level XML config_blocks and preserve namespaces for fragments.
@@ -97,10 +97,10 @@ class UniversalParser:
         :param str file_path: The path to the XML file to split
         :return: A list of XML strings for each top-level config_block
         :rtype: List[str]
-        :raises InvalidFileError: If the file does not exist or XML pre-processing fails
+        :raises InvalidInputDataError : If the file does not exist or XML pre-processing fails
         """
         if not os.path.exists(file_path):
-            raise InvalidFileError(f"Configuration file not found: {file_path}")
+            raise InvalidInputDataError(f"Configuration file not found: {file_path}")
 
         try:
             with open(file_path, "rb") as f:
@@ -134,7 +134,9 @@ class UniversalParser:
 
             return config_blocks
         except Exception as e:
-            raise InvalidFileError(f"Failed to pre-process XML fragment: {e}") from e
+            raise InvalidInputDataError(
+                f"Failed to pre-process XML fragment: {e}"
+            ) from e
 
     def _parse_libyang_block(
         self,
@@ -158,7 +160,7 @@ class UniversalParser:
         is_auto = isinstance(no_state, str) and no_state.lower() == "auto"
 
         if no_state not in ["auto", "ignore", "enforce"]:
-            raise InvalidFileError(
+            raise InvalidInputDataError(
                 f"Invalid no_state value: {no_state}. Must be 'auto', 'ignore', or 'enforce'."
             )
 
@@ -256,7 +258,7 @@ class UniversalParser:
             - "auto" to attempt enforcement first.
         :return: A list containing the parsed dictionary representation
         :rtype: List[Dict[str, Any]]
-        :raises InvalidFileError: If the file_path does not exist or unsupported file_type is provided
+        :raises InvalidInputDataError : If the file_path does not exist or unsupported file_type is provided
         :raises UniversalParserError: If any config_block fails validation
         """
         self.documents = []
@@ -273,7 +275,7 @@ class UniversalParser:
         elif file_type == "json":
             config_blocks = self._json_multi_root_handler(file_path)
         else:
-            raise InvalidFileError(f"Unsupported file type: {file_type}")
+            raise InvalidInputDataError(f"Unsupported file type: {file_type}")
         # Extract and load required modules from the blocks
         req_modules = set()
         for block in config_blocks:
@@ -289,14 +291,11 @@ class UniversalParser:
 
         # Parse each block
         for config_block in config_blocks:
-            try:
-                parsed_doc = self._parse_libyang_block(
-                    config_block, data_format=file_type, no_state=no_state
-                )
-                if parsed_doc:
-                    self.documents.append(parsed_doc)
-            except UniversalParserError as e:
-                raise e
+            parsed_doc = self._parse_libyang_block(
+                config_block, data_format=file_type, no_state=no_state
+            )
+            if parsed_doc:
+                self.documents.append(parsed_doc)
 
         return self.documents
 

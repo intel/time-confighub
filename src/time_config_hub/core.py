@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
-from tsn_config_parser.exceptions import InvalidFileError, UniversalParserError
+from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
 from tsn_config_parser.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -144,7 +144,7 @@ class TIMEConfigHub:
         uparser = UniversalParser(yang_dir)
         try:
             docs = uparser.parse(file_path=config_file, file_type="auto")
-        except InvalidFileError as exc:
+        except InvalidInputDataError as exc:
             raise TSNConfigError(
                 f"Invalid configuration file {config_file}: {exc}"
             ) from exc
@@ -437,3 +437,26 @@ class TIMEConfigHub:
                 raise
 
         return
+
+    def validate_config(self, config_file: str) -> bool:
+        """
+        Validate a configuration file without applying it.
+
+        :param str config_file: Path to configuration file (XML or YAML)
+        :return: True if configuration is valid, False otherwise
+        :rtype: bool
+        """
+        try:
+            self._parse_config(config_file)
+            logger.info(f"Configuration file {config_file} is valid.")
+            return True
+
+        except TSNConfigError:
+            logger.error(f"Configuration file {config_file} is invalid.")
+            return False
+
+        except Exception:
+            logger.exception(
+                f"Unexpected error validating configuration: {config_file}"
+            )
+            return False
