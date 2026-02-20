@@ -5,5 +5,5 @@ class UniversalParserError(Exception):
     """Raised when parsing or validation of TSN configuration data fails."""
 
 
-class InvalidFileError(UniversalParserError):
+class InvalidInputDataError(UniversalParserError):
     """Raised when the input data is invalid or malformed."""

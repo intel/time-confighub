@@ -129,10 +129,10 @@ def test_json_multi_root_handler_splits_array(tmp_path, up_module):
 
 
 def test_json_multi_root_handler_missing_file_raises(up_module):
-    """Missing JSON files raise InvalidFileError."""
+    """Missing JSON files raise InvalidInputDataError ."""
     parser = up_module.UniversalParser()
 
-    with pytest.raises(up_module.InvalidFileError):
+    with pytest.raises(up_module.InvalidInputDataError):
         parser._json_multi_root_handler("/nonexistent/file.json")
 
 
@@ -162,7 +162,7 @@ def test_xml_multi_root_handler_invalid_xml_raises(tmp_path, up_module):
 
     parser = up_module.UniversalParser()
 
-    with pytest.raises(up_module.InvalidFileError):
+    with pytest.raises(up_module.InvalidInputDataError):
         parser._xml_multi_root_handler(str(xml_file))
 
 
@@ -290,10 +290,10 @@ def test_parse_json_branch(monkeypatch, up_module):
 
 
 def test_parse_unsupported_type_raises(up_module):
-    """Unsupported file extensions raise InvalidFileError."""
+    """Unsupported file extensions raise InvalidInputDataError ."""
     parser = up_module.UniversalParser()
 
-    with pytest.raises(up_module.InvalidFileError):
+    with pytest.raises(up_module.InvalidInputDataError):
         parser.parse("file.yaml", file_type="yaml")
 
 

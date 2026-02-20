@@ -24,8 +24,6 @@ from typing import Optional
 import click
 import yaml
 
-from tsn_config_parser.universal_parser import UniversalParser
-
 from . import __version__
 from .config_reader import load_app_config
 from .core import TIMEConfigHub
@@ -82,13 +80,7 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
     app_config = ctx.obj.get("app_config")
 
     result = False
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
-    exit_code = TchExitCode.SUCCESS
+
     try:
         # ConfigDirectory from config file points to TSN traffic config directory
         config_hub = TIMEConfigHub(app_config)
@@ -101,10 +93,11 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
 
         config_hub.apply_config(config_file, dry_run=dry_run)
         result = True
+        exit_code = TchExitCode.SUCCESS
 
     except TSNConfigError as e:
         logger.error(f"Failed to apply configuration: {e}")
-        click.echo(f"✗ Failed to apply configuration: {e}", err=True)
+        click.echo("✗ Failed to apply configuration (see logs for details)", err=True)
         exit_code = TchExitCode.USER_INPUT_ERROR
 
     except Exception:
@@ -115,6 +108,7 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
     finally:
         if result:
             click.echo("✓ Configuration applied successfully")
+            sys.exit(exit_code)
         else:
             sys.exit(exit_code)
 
@@ -171,7 +165,7 @@ def status(ctx, interface: str, output_format: str):
 
     except TSNConfigError as e:
         logger.error(f"Configuration error: {e}")
-        click.echo(f"✗ Failed to retrieve status: {e}", err=True)
+        click.echo("✗ Failed to retrieve status (see logs for details)", err=True)
         exit_code = TchExitCode.USER_INPUT_ERROR
 
     except Exception:
@@ -182,6 +176,7 @@ def status(ctx, interface: str, output_format: str):
     finally:
         if result:
             click.echo("✓ Status retrieved successfully")
+            sys.exit(exit_code)
         else:
             sys.exit(exit_code)
 
@@ -225,7 +220,7 @@ def reset(ctx, interface: str, force: bool):
 
     except TSNConfigError as e:
         logger.error(f"Failed to reset configuration: {e}")
-        click.echo(f"✗ Failed to reset configuration: {e}", err=True)
+        click.echo("✗ Failed to reset configuration (see logs for details)", err=True)
         exit_code = TchExitCode.USER_INPUT_ERROR
 
     except Exception:
@@ -236,6 +231,7 @@ def reset(ctx, interface: str, force: bool):
     finally:
         if result:
             click.echo("✓ Configuration reset successfully")
+            sys.exit(exit_code)
         else:
             sys.exit(exit_code)
 
@@ -286,12 +282,13 @@ def daemon_status(ctx):
         exit_code = TchExitCode.UNEXPECTED_ERROR
 
     finally:
+        click.echo("=" * 40)
         if result:
             click.echo("✓ Daemon status retrieved successfully")
+            sys.exit(exit_code)
         else:
             click.echo("✗ Failed to retrieve daemon status", err=True)
             sys.exit(exit_code)
-        click.echo("=" * 40)
 
 
 @cli.command()
@@ -312,7 +309,7 @@ def daemon_start(ctx):
 
     result = False
     outcome_message = None
-    exit_code = TchExitCode.SUCCESS
+
     try:
         config_hub = TIMEConfigHub(app_config)
 
@@ -321,11 +318,13 @@ def daemon_start(ctx):
         if service_status == "active":
             outcome_message = "✓ Daemon is already running"
             result = True
+            exit_code = TchExitCode.SUCCESS
             return
 
         config_hub.service_manager.start_service()
         outcome_message = "✓ Daemon started successfully"
         result = True
+        exit_code = TchExitCode.SUCCESS
 
     except Exception:
         logger.exception("Unexpected error starting daemon")
@@ -334,7 +333,8 @@ def daemon_start(ctx):
 
     finally:
         if result:
-            click.echo(outcome_message or "✓ Daemon started successfully")
+            click.echo(outcome_message)
+            sys.exit(exit_code)
         else:
             click.echo("✗ Failed to start daemon", err=True)
             sys.exit(exit_code)
@@ -357,16 +357,19 @@ def daemon_stop(ctx):
     app_config = ctx.obj.get("app_config")
 
     result = False
+    outcome_message = None
     try:
         config_hub = TIMEConfigHub(app_config)
 
         service_status = config_hub.service_manager.get_service_status()
         if service_status != "active":
-            click.echo("✓ Daemon is not running")
+            outcome_message = "✓ Daemon is not running"
             result = True
+            exit_code = TchExitCode.SUCCESS
             return
 
         config_hub.service_manager.stop_service()
+        outcome_message = "✓ Daemon stopped successfully"
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -377,7 +380,8 @@ def daemon_stop(ctx):
 
     finally:
         if result:
-            click.echo("✓ Daemon stopped successfully")
+            click.echo(outcome_message)
+            sys.exit(exit_code)
         else:
             click.echo("✗ Failed to stop daemon", err=True)
             sys.exit(exit_code)
@@ -414,6 +418,7 @@ def daemon_restart(ctx):
     finally:
         if result:
             click.echo("✓ Daemon restarted successfully")
+            sys.exit(exit_code)
         else:
             click.echo("✗ Failed to restart daemon", err=True)
             sys.exit(exit_code)
@@ -438,26 +443,28 @@ def validate(ctx, config_file: str):
 
     # ConfigDirectory from config file points to TSN traffic config directory
     config_hub = TIMEConfigHub(app_config)
+    exit_code = TchExitCode.SUCCESS
 
     try:
-        parser = UniversalParser()
-        parsed_docs = parser.parse(config_file, file_type="auto")
+        if not config_hub.validate_config(config_file):
+            raise TSNConfigError(f"Configuration file {config_file} is invalid")
 
-        if not parsed_docs:
-            raise ValueError("Parsed configuration is empty")
-
+        logger.info(f"Configuration file {config_file} is valid")
         click.echo("✓ Configuration validated successfully\n")
-        click.echo(json.dumps(parsed_docs, indent=2))
-        result = True
         exit_code = TchExitCode.SUCCESS
+
+    except TSNConfigError as exc:
+        logger.error("Configuration validation failed")
+        click.echo(f"✗ Validation failed: {exc}", err=True)
+        exit_code = TchExitCode.USER_INPUT_ERROR
 
     except Exception as exc:  # surface any parsing/validation errors
         logger.exception("Configuration validation failed")
         click.echo(f"✗ Validation failed: {exc}", err=True)
         exit_code = TchExitCode.UNEXPECTED_ERROR
+
     finally:
-        if not result:
-            sys.exit(exit_code)
+        sys.exit(exit_code)
 
 
 @cli.command()
@@ -500,7 +507,7 @@ def config_show(ctx, format: str):
             for key, value in general_config.items():
                 click.echo(f"  {key}: {value}")
             click.echo("=" * 40)
-            result = True
+        result = True
         exit_code = TchExitCode.SUCCESS
 
     except Exception:
@@ -510,6 +517,7 @@ def config_show(ctx, format: str):
     finally:
         if result:
             click.echo("✓ Configuration displayed successfully")
+            sys.exit(exit_code)
         else:
             click.echo("✗ Unexpected Error reading configuration", err=True)
             sys.exit(exit_code)
