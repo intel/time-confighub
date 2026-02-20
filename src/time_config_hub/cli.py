@@ -438,7 +438,6 @@ def validate(ctx, config_file: str):
     :param str config_file: Path to configuration file to validate
     """
     logger.info("Validating TSN configuration file...")
-    result = False
     app_config = ctx.obj.get("app_config")
 
     # ConfigDirectory from config file points to TSN traffic config directory

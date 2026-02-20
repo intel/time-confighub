@@ -8,7 +8,7 @@ import json
 import os
 import xml.etree.ElementTree as StdET
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 
 import defusedxml.ElementTree as SafeET
 import libyang
