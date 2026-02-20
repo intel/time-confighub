@@ -5,6 +5,8 @@ GE Dictionary Helper for TSN XML/YAML/JSON configuration.
 
 from typing import Any, Dict, List
 
+from .exceptions import InvalidInputDataError
+
 
 class GE_Dictionary:
     """Helper class to extract specific TSN configuration values."""
@@ -32,7 +34,9 @@ class GE_Dictionary:
                             names.append(str(name_entry))
 
         if not names:
-            raise ValueError("No interface name found in configuration file.")
+            raise InvalidInputDataError(
+                "No interface name found in configuration file."
+            )
 
         return names
 
@@ -49,7 +53,7 @@ class GE_Dictionary:
             )
 
         if not stream_ids:
-            raise ValueError("No stream ID found in configuration file.")
+            raise InvalidInputDataError("No stream ID found in configuration file.")
 
         return stream_ids
 
@@ -314,7 +318,9 @@ class GE_Dictionary:
                 entries.extend(gate_entries)
 
         if not entries:
-            raise ValueError("No gate-control-entry found in configuration file.")
+            raise InvalidInputDataError(
+                "No gate-control-entry found in configuration file."
+            )
 
         return entries
 
