@@ -10,7 +10,7 @@ The Time Config Hub provides a comprehensive tool for managing Time-Sensitive Ne
 All functionality is available through the unified `tch` command-line interface.
 
 Key features:
-- Support for XML and YAML configuration formats
+- Support for XML and JSON configuration formats
 - Command-line interface with `tch` command
 - Linux service for automatic configuration monitoring
 - Configuration validation and dry-run mode
@@ -107,10 +107,10 @@ The `tch` command provides the main interface:
 tch --version
 
 # Apply configuration (dry run to validate)
-tch apply config.yaml --interface eth0 --dry-run
+tch apply config.json --interface eth0 --dry-run
 
 # Apply configuration (requires root privileges)
-sudo tch apply config.yaml --interface eth0
+sudo tch apply config.json --interface eth0
 
 # Get current config status
 tch status --interface eth0 --format json
@@ -119,7 +119,7 @@ tch status --interface eth0 --format json
 sudo tch reset --interface eth0
 
 # Validate configuration file
-tch validate config.yaml  # Note: Not yet implemented
+tch validate config.json  # Note: Not yet implemented
 ```
 
 #### Daemon Commands
@@ -138,7 +138,7 @@ sudo tch daemon-restart
 
 | Command | Description |
 |---------|-------------|
-| `apply <config_file>` | Apply TSN configuration from XML/YAML file |
+| `apply <config_file>` | Apply TSN configuration from XML/JSON file |
 | `status [--interface]` | Show current config status |
 | `reset [--interface]` | Reset TSN configuration |
 | `daemon-status` | Show daemon status information |
@@ -150,10 +150,25 @@ sudo tch daemon-restart
 
 ### Configuration Files
 
-Time Config Hub supports both XML and YAML formats. 
+Time Config Hub supports both XML and JSON formats. 
+
+### Supported Stream types and Queue allocation
+
+Time Config Hub currently supports the following stream types:
+- VLAN Tagged Time Aware Streams
+- VLAN Tagged Non-Time Aware Streams
+- Best-Effort (BE) streams (untagged traffic or VLAN tagged with PCP 0-3)
+
+Queue mapping is determined by VLAN priority (PCP):
+
+| VLAN Priority (PCP) | Stream Type                | Queue Mapping |
+|---------------------|----------------------------|---------------|
+| 0-3                 | Best-Effort (BE)           | Queue 0
+| 4-5                 | VLAN Tagged Non-Time Aware Streams   | Queue 1 |
+| 6-7                 | VLAN Tagged Time Aware Streams       | Queue 2-3 (based on PCP) |
 
 
-#### TODO: Example YAML Configuration:
+#### TODO: Example JSON Configuration:
 
 
 ### Programmatic API
@@ -165,7 +180,7 @@ from time_config_hub import TIMEConfigHub
 config_hub = TIMEConfigHub()
 
 # Apply configuration
-success = config_hub.apply_config("config.yaml", interface="eth0")
+success = config_hub.apply_config("config.xml", interface="eth0")
 
 # Get status
 status = config_hub.get_status(interface="eth0")
@@ -225,8 +240,8 @@ For technical and development information:
 - Ensure the interface supports TSN features: `tch status --interface <interface>`
 
 **Configuration parsing errors**
-- Validate your XML/YAML files: `tch validate config.yaml`
-- Use dry-run mode before applying: `tch apply config.yaml --dry-run`
+- Validate your XML/JSON files: `tch validate config.xml`
+- Use dry-run mode before applying: `tch apply config.xml --dry-run`
 - Check the configuration format matches the expected schema
 
 **Daemon not responding**
