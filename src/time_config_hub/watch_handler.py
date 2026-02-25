@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Executor for handling file events asynchronously
 TOTAL_WORKER = 1  # Adjust based on expected load
 DEBOUNCE_INTERVAL = 0.5  # seconds
-SUPPORTED_EXT = [".yaml", ".yml", ".xml"]
+SUPPORTED_EXT = [".json", ".xml"]
 executor = ThreadPoolExecutor(max_workers=TOTAL_WORKER)  # adjust workers
 
 logger.debug(f"ThreadPoolExecutor initialized with {TOTAL_WORKER} workers")
@@ -40,7 +40,7 @@ class WatchHandler(FileSystemEventHandler):
         Determine if a file is a valid configuration file that should be processed.
 
         Accepts:
-        - Configuration files with valid extensions (.yaml, .yml, .xml)
+        - Configuration files with valid extensions (.json, .xml)
         - Non-hidden files (not starting with .)
         - Non-temporary files (not editor swap/backup files)
 
