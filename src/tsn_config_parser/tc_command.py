@@ -723,6 +723,8 @@ def create_tc_filter_commands_for_non_time_aware_talkers(
     """
     commands: List[str] = []
 
+    processed_ifaces = set()
+
     for stream_id, talkers in vlan_non_time_aware_info.items():
         for talker in talkers:
             interface = talker.get("interface_name")
@@ -747,6 +749,12 @@ def create_tc_filter_commands_for_non_time_aware_talkers(
             layer3_proto_cmd = _get_ip_protocol_and_ports_filter_configuration(
                 proto_num, dst_port_num, src_port_num
             )
+
+            # --- Automatically add clsact if missing ---
+            if interface not in processed_ifaces:
+                if not _clsact_exists(interface):
+                    commands.append(f"tc qdisc add dev {interface} clsact")
+                processed_ifaces.add(interface)
 
             # Base command
             cmd = f"tc filter add dev {interface} egress protocol ip flower "

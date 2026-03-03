@@ -140,33 +140,43 @@ def sample_vlan_non_time_aware_info():
     }
 
 
-def test_generate_non_time_aware_vlan_push_commands(sample_vlan_non_time_aware_info):
+@patch("tsn_config_parser.tc_command._clsact_exists", return_value=False)
+def test_generate_non_time_aware_vlan_push_commands(
+    _mock_clsact, sample_vlan_non_time_aware_info
+):
     """Verify correct tc filter commands are generated for non-time-aware talkers."""
 
     cmds = create_tc_filter_commands_for_non_time_aware_talkers(
         sample_vlan_non_time_aware_info
     )
 
-    # Expect one command per talker
-    assert len(cmds) == 2
+    clsact_cmds = [c for c in cmds if "clsact" in c]
+    filter_cmds = [c for c in cmds if "filter add" in c]
+
+    # Expect one clsact and one filter per interface
+    assert len(clsact_cmds) == 2
+    assert len(filter_cmds) == 2
 
     # Command should include VLAN push syntax
-    assert all("action vlan push" in c for c in cmds)
+    assert all("action vlan push" in c for c in filter_cmds)
     # Filter protocol should be IP
-    assert all("protocol ip flower" in c for c in cmds)
+    assert all("protocol ip flower" in c for c in filter_cmds)
     # VLAN push action should include 802.1Q specification
-    assert all("protocol 802.1Q" in c for c in cmds)
+    assert all("protocol 802.1Q" in c for c in filter_cmds)
 
     # Validate that IDs and priorities appear correctly
-    assert any("id 100 protocol 802.1Q priority 3" in c for c in cmds)
-    assert any("id 200 protocol 802.1Q priority 5" in c for c in cmds)
+    assert any("id 100 protocol 802.1Q priority 3" in c for c in filter_cmds)
+    assert any("id 200 protocol 802.1Q priority 5" in c for c in filter_cmds)
 
     # Check that fields like src_mac and dst_ip are correctly included
-    assert any("src_mac aa:bb:cc:dd:ee:ff" in c for c in cmds)
-    assert any("dst_ip 192.168.1.20" in c for c in cmds)
+    assert any("src_mac aa:bb:cc:dd:ee:ff" in c for c in filter_cmds)
+    assert any("dst_ip 192.168.1.20" in c for c in filter_cmds)
+    # skb priority should mirror VLAN priority
+    assert all("action skbedit priority" in c for c in filter_cmds)
 
 
-def test_non_time_aware_vlan_handles_missing_fields():
+@patch("tsn_config_parser.tc_command._clsact_exists", return_value=False)
+def test_non_time_aware_vlan_handles_missing_fields(_mock_clsact):
     """Ensure missing optional fields do not break command generation."""
 
     minimal_data = {
@@ -181,9 +191,13 @@ def test_non_time_aware_vlan_handles_missing_fields():
 
     cmds = create_tc_filter_commands_for_non_time_aware_talkers(minimal_data)
 
-    # Should still generate one valid command
-    assert len(cmds) == 1
-    cmd = cmds[0]
+    clsact_cmds = [c for c in cmds if "clsact" in c]
+    filter_cmds = [c for c in cmds if "filter add" in c]
+
+    # Should still generate one clsact and one filter
+    assert len(clsact_cmds) == 1
+    assert len(filter_cmds) == 1
+    cmd = filter_cmds[0]
 
     # Should include VLAN push even with missing fields
     assert "action vlan push id 300 protocol 802.1Q priority 2" in cmd
