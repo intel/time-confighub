@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 # File: universal_parser.py
 """
 XML and JSON Parser using libyang for YANG-modeled configuration data.

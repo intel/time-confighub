@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Intel I226 network device implementation.
 
 This module provides the IntelI226 device class for Intel I226 network controllers.

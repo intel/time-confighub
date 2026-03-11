@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2025 Intel Corporation -->
+<!-- SPDX-License-Identifier: BSD-3-Clause -->
+
 <cnc-config xmlns="urn:ieee:std:802.1Q:yang:ieee802-dot1q-cnc-config">
   <domain>
     <domain-id>chronos-domain</domain-id>

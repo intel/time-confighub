@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Utilities for loading YANG modules into a libyang context.
 
 This package provides helper functions to locate and load YANG modules, enabling

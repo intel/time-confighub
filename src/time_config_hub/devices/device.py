@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Device abstraction for network interfaces.
 
 This module provides a base Device class for network device implementations.

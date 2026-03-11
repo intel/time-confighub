@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 # File: GE_Dictionary.py
 """
 GE Dictionary Helper for TSN XML/YAML/JSON configuration.
