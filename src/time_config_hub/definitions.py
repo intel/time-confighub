@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 from pathlib import Path
 
 APP_CONFIG_DIR = Path("/etc/tch/app_config")

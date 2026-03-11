@@ -1,3 +1,6 @@
+[comment]: # (SPDX-FileCopyrightText: 2025 Intel Corporation)
+[comment]: # (SPDX-License-Identifier: BSD-3-Clause)
+
 
 # Scenario 1: TSN Configuration Example
 ## Scenario Overview

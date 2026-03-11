@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 # File: tc_command.py
 """
 tc_command

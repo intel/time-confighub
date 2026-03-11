@@ -1,3 +1,6 @@
+[comment]: # (SPDX-FileCopyrightText: 2025 Intel Corporation)
+[comment]: # (SPDX-License-Identifier: BSD-3-Clause)
+
 # Time Config Hub Package Structure
 
 This document provides technical information for developers and maintainers of the Time Config Hub Python package.

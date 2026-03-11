@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Ethtool command utilities for network interface management.
 
 This module provides the EthtoolCommand class for executing ethtool operations

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Exit codes used by the Time Config Hub CLI."""
 
 from enum import IntEnum

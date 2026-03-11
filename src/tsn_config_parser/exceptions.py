@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Custom exceptions for tsn_config_parser parsing and validation."""
 
 
