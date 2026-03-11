@@ -1,3 +1,6 @@
+[comment]: # (SPDX-FileCopyrightText: 2025 Intel Corporation)
+[comment]: # (SPDX-License-Identifier: BSD-3-Clause)
+
 # Security Policy
 Intel is committed to rapidly addressing security vulnerabilities affecting our customers and providing clear guidance on the solution, impact, severity and mitigation. 
 

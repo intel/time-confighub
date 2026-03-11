@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 include README.md
 include LICENSE
 include src/time_config_hub/templates/*.service

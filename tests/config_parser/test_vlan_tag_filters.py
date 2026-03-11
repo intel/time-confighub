@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
 import pytest
 
 from tsn_config_parser.GE_dictionary import GE_Dictionary
