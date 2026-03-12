@@ -225,18 +225,17 @@ class TIMEConfigHub:
             all_talker_info
         )
 
-        # Generate filter commands
+        # Generate and run commands for Time Aware Talkers
         time_aware_vlan_commands = create_tc_filter_commands_for_time_aware_talkers(
             time_aware_vlan_talkers
         )
-        non_time_aware_vlan_commands = (
-            create_tc_filter_commands_for_non_time_aware_talkers(vlan_non_time_aware)
-        )
-
-        # Run filter commands
         logger.info("\n=== Generated smart tc filter [TIME-AWARE] commands ===")
         fail_count = self._run_tc_commands(time_aware_vlan_commands, dry_run=dry_run)
 
+        # Generate and run commands for Non-Time Aware Talkers
+        non_time_aware_vlan_commands = (
+            create_tc_filter_commands_for_non_time_aware_talkers(vlan_non_time_aware)
+        )
         logger.info("\n=== Generated smart tc filter [NON-TIME-AWARE] commands ===")
         fail_count += self._run_tc_commands(
             non_time_aware_vlan_commands, dry_run=dry_run
