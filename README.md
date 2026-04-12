@@ -46,7 +46,7 @@ The Time Config Hub is designed to run on end stations equipped with TSN-capable
 
 ```bash
 sudo apt install python3-dev gcc python3-cffi
-git clone https://github.com/CESNET/libyang.git
+git clone -b v4.2.2 https://github.com/CESNET/libyang.git
 cd libyang
 mkdir build
 cd build
