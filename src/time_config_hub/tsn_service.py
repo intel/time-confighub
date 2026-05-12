@@ -1,27 +1,19 @@
-# SPDX-FileCopyrightText: 2025 Intel Corporation
+# SPDX-FileCopyrightText: 2026 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Time Config Hub Core Module
+TSN service implementation for Time Config Hub library API.
 
-This module contains the core TIMEConfigHub class that handles:
-
-- Configuration application from XML/YAML files
-- Status retrieval for TSN interfaces
-- Configuration reset to defaults
-- Interface validation for TSN capabilities
-- Integration with traffic control (tc) commands
-
-The core module serves as the primary interface between the CLI
-and the underlying system configuration mechanisms.
 """
+
+from __future__ import annotations
 
 import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
-from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
+from tsn_config_parser.exceptions import UniversalParserError
 from tsn_config_parser.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -33,44 +25,36 @@ from tsn_config_parser.tc_command import (
     show_qdisc,
     show_tc_egress_filters,
 )
-from tsn_config_parser.universal_parser import UniversalParser
-from yang_modules import DEFAULT_YANG_DIR
 
+from .config_parser_service import ConfigParserService
 from .exceptions import TSNConfigError
+from .service_interfaces import TSNServiceInterface
+
 
 logger = logging.getLogger(__name__)
 
 
-class TIMEConfigHub:
-    """
-    Main Time Config Hub class.
+class TSNService(TSNServiceInterface):
+    """Default TSN service implementation."""
 
-    Handles configuration application, status retrieval, and reset operations
-    for Time-Sensitive Networking (TSN) configurations.
-    It should be stateless or hold minimal state only
-    """
-
-    def __init__(self, app_config: dict):
-        """
-        Initialize Time Config Hub.
-
-        :param str config_dir: Directory for TSN traffic configuration files
-        :param bool verbose: Enable verbose logging
-        """
-        logger.debug("Initializing Time Config Hub...")
+    def __init__(self, app_config: Dict[str, Any]):
+        logger.debug("Initializing Time Config Hub TSN Service...")
         self.app_config = app_config
-
+        
         # config_dir suppose to store applied configuration backups
         self.config_dir = Path(app_config.get("General", {}).get("ConfigDirectory"))
         self.verbose = app_config.get("General", {}).get("Verbosity")
         self.service_manager = ServiceManager()
-
+        
         # Ensure config directory exists
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(f"Time Config Hub initialized with config_dir: {self.config_dir}")
+        self._parser = ConfigParserService(app_config)
 
-    def apply_config(self, config_file: str, dry_run: bool = False):
+        logger.debug(f"TCH TSN Service initialized with config_dir: {self.config_dir}")
+
+
+    def apply(self, config_file: str, dry_run: bool = False) -> None:
         """
         Apply configuration from a file.
 
@@ -84,8 +68,8 @@ class TIMEConfigHub:
             logger.info(f"Applying configuration from {config_file}")
 
             # Parse configuration file
-            uparser = self._parse_config(config_file)
-            ge_dict = uparser.get_dictionary_helper()  # automatically checks chronos
+            uparser = self._parser.parse_config(config_file) 
+            ge_dict = uparser.get_dictionary_helper()   # automatically checks chronos
             if not ge_dict:
                 logger.info("Chronos domain not found. No dictionary available.")
                 return
@@ -133,41 +117,105 @@ class TIMEConfigHub:
             logger.exception(f"Unexpected error applying configuration: {config_file}")
             raise TSNConfigError("Unexpected error applying configuration") from e
 
-    def _parse_config(self, config_file: str) -> UniversalParser:
-        """Parse a configuration file and return the parser.
-
-        :param str config_file: Path to configuration file (XML or YAML)
-        :return: UniversalParser instance
-        :rtype: UniversalParser
-        :raises TSNConfigError: If parsing fails or yields no documents
+    def status(self, interface: str) -> Dict[str, Any]:
         """
-        yang_dir = self.app_config.get("General", {}).get(
-            "YangModuleDirectory", DEFAULT_YANG_DIR
-        )
-        uparser = UniversalParser(yang_dir)
+        Get current TSN configuration status.
+
+        :param str interface: Specific interface to check
+        :return: Dictionary with status information
+        :rtype: Dict[str, Any]
+        :raises TSNConfigError: If status retrieval fails
+        """
         try:
-            docs = uparser.parse(file_path=config_file, file_type="auto")
-        except InvalidInputDataError as exc:
-            raise TSNConfigError(
-                f"Invalid configuration file {config_file}: {exc}"
-            ) from exc
-        except UniversalParserError as exc:
-            raise TSNConfigError(
-                f"Failed to parse configuration {config_file}: {exc}"
-            ) from exc
+            qdisc_state = show_qdisc(interface)
+            logger.debug(f"qdisc state: {qdisc_state}")
 
-        if not docs:
-            raise TSNConfigError(
-                f"No valid configuration documents found in {config_file}"
+            filter_state = show_tc_egress_filters(interface)
+            logger.debug(f"egress filter state: {filter_state}")
+
+            status = {
+                "qdisc": qdisc_state["stdout"].strip(),
+                "egress_filters": filter_state["stdout"].strip(),
+            }
+            return status
+
+        except Exception as e:
+            logger.exception("Failed to get status")
+            raise TSNConfigError("Failed to get status") from e
+
+    def reset(self, interface: str) -> bool:
+        """
+        Reset TSN configuration to defaults.
+
+        :param str interface: Specific interface to reset
+        :return: True if successful, False otherwise
+        :rtype: bool
+        :raises TSNConfigError: If configuration reset fails
+        """
+        try:
+            results = []
+            results.append(reset_egress_filter_interface(interface))
+            results.append(reset_clsact_qdisc_interface(interface))
+            results.append(reset_root_qdisc_interface(interface))
+
+            for res in results:
+                if res["returncode"] != 0:
+                    raise TSNConfigError(
+                        f"Failed to reset qdisc on interface {interface}: "
+                        f"{res['stderr']}"
+                    )
+
+            logger.info(
+                f"TSN configuration reset successfully for interface: {interface}"
             )
+            return True
 
-        return uparser
+        except Exception as e:
+            logger.exception("Failed to reset configuration")
+            raise TSNConfigError("Failed to reset configuration") from e
 
-    def _reset_interfaces(self, interfaces: List[str]) -> None:
+    def validate(self, config_file: str) -> bool:
+        return self._parser.validate_config(config_file)
+
+    def file_event_handler(self, event_type: str, file_path: str) -> None:
+        """
+        Handle file system events, such as configuration file changes.
+        This method is used by the watcher running in background (tch service).
+
+        :param str event_type: Type of event ('created', 'modified', 'deleted')
+        :param str file_path: Path to the file that triggered the event
+        :return: None
+        :rtype: None
+        """
+        logger.info(f"Handling file event: {event_type} for {file_path}")
+
+        if event_type == "deleted":
+            # For now, just log deletion events
+            logger.debug(f"No action taken for deleted file: {file_path}")
+            return
+
+        if event_type in ["created", "modified"]:
+            try:
+                # For now, created and modified events are treated the same
+                logger.debug(f"Handling {event_type} event: {file_path}")
+                self.apply(file_path, dry_run=False)
+                logger.info(f"Configuration applied successfully from {file_path}")
+
+            except TSNConfigError:
+                logger.error(f"Error handling file event {event_type}: {file_path}")
+
+            except UniversalParserError:
+                logger.error(f"Parsing error for file event {event_type}: {file_path}")
+
+            except Exception:
+                logger.exception(f"Error handling file event {event_type}: {file_path}")
+                raise
+
+    def _reset_interfaces(self, interfaces: list[str]) -> None:
         """Reset qdisc and filters for a list of interfaces."""
         for interface in interfaces:
             logger.info(f"Resetting qdisc and filters on interface: {interface}")
-            self.reset_config(interface)
+            self.reset(interface)
 
     def _apply_qdisc_configuration(
         self,
@@ -202,7 +250,7 @@ class TIMEConfigHub:
 
         if fail_count > 0:
             raise TSNConfigError(f"Failed to apply qdisc config: {config_file}")
-
+        
         logger.info(f"qdisc configuration applied successfully: {config_file}")
 
     def _apply_filter_configuration(
@@ -285,7 +333,6 @@ class TIMEConfigHub:
                     + f" command: {cmd}\n"
                     + f" stderr: {result['stderr']}"
                 )
-
         return fail_count
 
     def show_qdisc_state(self, interfaces: Iterable[str]) -> None:
@@ -325,62 +372,6 @@ class TIMEConfigHub:
                     f"Earliest: {t['earliest_transmit_offset']}, Latest: {t['latest_transmit_offset']}"
                 )
 
-    def get_status(self, interface: str) -> Dict[str, Any]:
-        """
-        Get current TSN configuration status.
-
-        :param str interface: Specific interface to check
-        :return: Dictionary with status information
-        :rtype: Dict[str, Any]
-        :raises TSNConfigError: If status retrieval fails
-        """
-        try:
-            qdisc_state = show_qdisc(interface)
-            logger.debug(f"qdisc state: {qdisc_state}")
-
-            filter_state = show_tc_egress_filters(interface)
-            logger.debug(f"egress filter state: {filter_state}")
-
-            status = {
-                "qdisc": qdisc_state["stdout"].strip(),
-                "egress_filters": filter_state["stdout"].strip(),
-            }
-            return status
-
-        except Exception as e:
-            logger.exception("Failed to get status")
-            raise TSNConfigError("Failed to get status") from e
-
-    def reset_config(self, interface: str) -> bool:
-        """
-        Reset TSN configuration to defaults.
-
-        :param str interface: Specific interface to reset
-        :return: True if successful, False otherwise
-        :rtype: bool
-        :raises TSNConfigError: If configuration reset fails
-        """
-        try:
-            results = []
-            results.append(reset_egress_filter_interface(interface))
-            results.append(reset_clsact_qdisc_interface(interface))
-            results.append(reset_root_qdisc_interface(interface))
-
-            for res in results:
-                if res["returncode"] != 0:
-                    raise TSNConfigError(
-                        f"Failed to reset qdisc on interface {interface}: "
-                        f"{res['stderr']}"
-                    )
-            logger.info(
-                f"TSN configuration reset successfully for interface: {interface}"
-            )
-            return True
-
-        except Exception as e:
-            logger.exception("Failed to reset configuration")
-            raise TSNConfigError("Failed to reset configuration") from e
-
     def _validate_interface(self, interface: str) -> bool:
         """
         Validate that network interface exists and is TSN-capable.
@@ -395,70 +386,11 @@ class TIMEConfigHub:
             if not iface_path.exists():
                 logger.error(f"Interface {interface} does not exist.")
                 return False
-
+            
             # TODO: Additional TSN capability checks could be added here
             # For now, we assume any interface can be used
             return True
 
         except Exception:
             logger.exception(f"Interface validation failed for {interface}")
-            return False
-
-    def file_event_handler(self, event_type: str, file_path: str):
-        """
-        Handle file system events, such as configuration file changes.
-        This method is used by the watcher running in background (tch service).
-
-        :param str event_type: Type of event ('created', 'modified', 'deleted')
-        :param str file_path: Path to the file that triggered the event
-        :return: None
-        :rtype: None
-        """
-        logger.info(f"Handling file event: {event_type} for {file_path}")
-
-        if event_type == "deleted":
-            # For now, just log deletion events
-            logger.debug(f"No action taken for deleted file: {file_path}")
-            return
-
-        if event_type in ["created", "modified"]:
-            try:
-                # For now, created and modified events are treated the same
-                logger.debug(f"Handling {event_type} event: {file_path}")
-                self.apply_config(file_path, dry_run=False)
-                logger.info(f"Configuration applied successfully from {file_path}")
-
-            except TSNConfigError:
-                logger.error(f"Error handling file event {event_type}: {file_path}")
-
-            except UniversalParserError:
-                logger.error(f"Parsing error for file event {event_type}: {file_path}")
-
-            except Exception:
-                logger.exception(f"Error handling file event {event_type}: {file_path}")
-                raise
-
-        return
-
-    def validate_config(self, config_file: str) -> bool:
-        """
-        Validate a configuration file without applying it.
-
-        :param str config_file: Path to configuration file (XML or YAML)
-        :return: True if configuration is valid, False otherwise
-        :rtype: bool
-        """
-        try:
-            self._parse_config(config_file)
-            logger.info(f"Configuration file {config_file} is valid.")
-            return True
-
-        except TSNConfigError:
-            logger.error(f"Configuration file {config_file} is invalid.")
-            return False
-
-        except Exception:
-            logger.exception(
-                f"Unexpected error validating configuration: {config_file}"
-            )
             return False

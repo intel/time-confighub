@@ -29,6 +29,16 @@ class TSNConfigError(Exception):
     pass
 
 
+class TCCConfigError(Exception):
+    """
+    Base exception for TCC configuration errors.
+
+    All other TCC-related exceptions inherit from this base class.
+    """
+
+    pass
+
+
 class ServiceError(TSNConfigError):
     """
     Exception raised for errors related to service management.
