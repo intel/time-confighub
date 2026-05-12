@@ -35,7 +35,7 @@ setup(
     version="1.0.0",
     author="Intel",
     author_email="noor.azura.ahmad.tarmizi@intel.com, eng.keong.koay@intel.com, "
-    + "shi.jie.donavan.liow@intel.com",
+    + "shi.jie.donavan.liow@intel.com, hea.ming.su@intel.com",
     description="Time Config Hub for Intel TSN-capable hardware",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
