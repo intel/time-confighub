@@ -12,14 +12,12 @@ import os
 import xml.etree.ElementTree as StdET
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-
 import defusedxml.ElementTree as SafeET
 import libyang
 
 from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
 from tsn_config_parser.GE_dictionary import GE_Dictionary
 from yang_modules import DEFAULT_YANG_DIR, load_yang_module
-
 
 def _collect_json_prefixes(node: Any, keywords: List[str]) -> Set[str]:
     """Recursively collect and return YANG module prefixes from JSON content."""
@@ -220,7 +218,7 @@ class UniversalParser:
         :rtype: List[str]
         """
         req_modules = set()
-        keywords = ["ietf", "ieee", "iana"]
+        keywords = ["ietf", "ieee", "iana", "intel"]
         file_type = file_type.lower()
 
         if file_type == "xml":
