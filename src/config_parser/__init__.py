@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-TSN Configuration Parser
+Configuration Parser
 
-A collection of parsers for handling TSN configuration files in multiple formats.
+A collection of parsers for handling real time (TCC, TSN) configuration files in multiple formats.
 
 This package provides:
 
@@ -14,11 +14,11 @@ This package provides:
 - Comprehensive test suite for all parser functionality
 
 The parsers are designed to handle configuration files used in
-Time-Sensitive Networking (TSN) applications and can parse files
+real-time applications and can parse files
 containing multiple configuration documents or root elements.
 """
 
-from .universal_parser import UniversalParser
+from .common.universal_parser import UniversalParser
 
 __all__ = [
     "UniversalParser",

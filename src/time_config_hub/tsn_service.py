@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
-from tsn_config_parser.exceptions import UniversalParserError
-from tsn_config_parser.tc_command import (
+from config_parser.common.exceptions import UniversalParserError
+from config_parser.tsn.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
     create_tc_qdisc_gcl_command,
