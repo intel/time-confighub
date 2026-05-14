@@ -23,8 +23,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
-from tsn_config_parser.universal_parser import UniversalParser
+from config_parser.common.exceptions import InvalidInputDataError, UniversalParserError
+from config_parser.common.universal_parser import UniversalParser
 from yang_modules import DEFAULT_YANG_DIR
 
 from .exceptions import TSNConfigError
