@@ -1,284 +1,281 @@
 <!-- SPDX-FileCopyrightText: 2026 Intel Corporation -->
 <!-- SPDX-License-Identifier: BSD-3-Clause -->
 
-<tcc-configs xmlns="urn:intel:params:xml:ns:yang:intel-tcc-config">
+<tcc-config xmlns="urn:intel:params:xml:ns:yang:intel-tcc-config">
 
   <!-- ================================================================
-       Instance: rtc-testbench
+       Profile: rtc-testbench
        Derived from RTC-Testbench busypolling_1ms_rtworkload tuning script
        ================================================================ -->
-  <tcc-config>
-    <instance-id>rtc-testbench</instance-id>
-    <instance-description>RTC Test Bench busypolling 1ms RT workload tuning profile (16-core i226 platform)</instance-description>
+  <profile-id>rtc-testbench</profile-id>
+  <profile-description>RTC Test Bench busypolling 1ms RT workload tuning profile (16-core i226 platform)</profile-description>
 
-    <!-- ================================================================
-         Step 1: CPU Scheduling Isolation
-         tuna __cpus=1 __isolate
-         tuna __cpus=2 __isolate
-         ================================================================ -->
-    <cpu-scheduling>
+  <!-- ================================================================
+        Step 1: CPU Scheduling Isolation
+        tuna __cpus=1 __isolate
+        tuna __cpus=2 __isolate
+        ================================================================ -->
+  <cpu-scheduling>
 
-      <!-- CPU 0: housekeeping not isolated -->
+    <!-- CPU 0: housekeeping not isolated -->
+    <cpu-assignment>
+      <cpu-id>0</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+
+    <!-- CPU 1: real-time isolated -->
+    <cpu-assignment>
+      <cpu-id>1</cpu-id>
+      <isolate>true</isolate>
+    </cpu-assignment>
+
+    <!-- CPU 2: real-time isolated -->
+    <cpu-assignment>
+      <cpu-id>2</cpu-id>
+      <isolate>true</isolate>
+    </cpu-assignment>
+
+    <!-- CPUs 3-15: housekeeping not isolated -->
+    <cpu-assignment>
+      <cpu-id>3</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>4</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>5</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>6</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>7</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>8</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>9</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>10</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>11</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>12</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>13</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>14</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+    <cpu-assignment>
+      <cpu-id>15</cpu-id>
+      <isolate>false</isolate>
+    </cpu-assignment>
+
+  </cpu-scheduling>
+
+  <!-- ================================================================
+        Step 2: CPU Frequency C-state control and frequency scaling
+
+        Two profiles are defined:
+          rt-core      : fixed 3100 MHz, C-states 0-3 disabled
+          housekeeping : powersave 400-2100 MHz, no C-state override
+        ================================================================ -->
+  <cpu-frequency>
+
+    <!-- Profile 1: real-time core
+          cpupower -c N idle-set -d 0|1|2|3
+          cpupower -c N frequency-set __min 3100M __max 3100M -g performance -->
+    <frequency-profile>
+      <profile-id>rt-core</profile-id>
+
+      <frequency>
+        <governor>performance</governor>
+        <!-- Fixed frequency: min == max (required when governor=performance) -->
+        <min-freq-mhz>3100</min-freq-mhz>
+        <max-freq-mhz>3100</max-freq-mhz>
+      </frequency>
+
+      <idle>
+        <!-- No bulk reset needed; override all four states explicitly -->
+        <enable-all>false</enable-all>
+        <!-- Disable C-states 0=POLL, 1=C1, 2=C1E, 3=C3/C6 individually -->
+        <state-override>
+          <state-id>0</state-id>
+          <action>disable</action>
+        </state-override>
+        <state-override>
+          <state-id>1</state-id>
+          <action>disable</action>
+        </state-override>
+        <state-override>
+          <state-id>2</state-id>
+          <action>disable</action>
+        </state-override>
+        <state-override>
+          <state-id>3</state-id>
+          <action>disable</action>
+        </state-override>
+      </idle>
+    </frequency-profile>
+
+    <!-- Profile 2: housekeeping core
+          cpupower -c N frequency-set __min 400M __max 2100M -g powersave -->
+    <frequency-profile>
+      <profile-id>housekeeping</profile-id>
+
+      <frequency>
+        <governor>powersave</governor>
+        <min-freq-mhz>400</min-freq-mhz>
+        <max-freq-mhz>2100</max-freq-mhz>
+      </frequency>
+
+      <idle>
+        <!-- Leave all C-states at the kernel default for housekeeping CPUs -->
+        <enable-all>false</enable-all>
+      </idle>
+    </frequency-profile>
+
+    <!-- Profile assignment: map each logical CPU to a profile -->
+    <profile-assignment>
+
+      <!-- CPU 0: housekeeping -->
       <cpu-assignment>
         <cpu-id>0</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
 
-      <!-- CPU 1: real-time isolated -->
+      <!-- CPU 1: real-time -->
       <cpu-assignment>
         <cpu-id>1</cpu-id>
-        <isolate>true</isolate>
+        <profile-ref>rt-core</profile-ref>
       </cpu-assignment>
 
-      <!-- CPU 2: real-time isolated -->
+      <!-- CPU 2: real-time -->
       <cpu-assignment>
         <cpu-id>2</cpu-id>
-        <isolate>true</isolate>
+        <profile-ref>rt-core</profile-ref>
       </cpu-assignment>
 
-      <!-- CPUs 3-15: housekeeping not isolated -->
+      <!-- CPUs 3-15: housekeeping -->
       <cpu-assignment>
         <cpu-id>3</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>4</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>5</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>6</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>7</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>8</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>9</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>10</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>11</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>12</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>13</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>14</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
       <cpu-assignment>
         <cpu-id>15</cpu-id>
-        <isolate>false</isolate>
+        <profile-ref>housekeeping</profile-ref>
       </cpu-assignment>
 
-    </cpu-scheduling>
+    </profile-assignment>
+  </cpu-frequency>
 
-    <!-- ================================================================
-         Step 2: CPU Frequency C-state control and frequency scaling
+  <!-- ================================================================
+        Step 3: Uncore / Ring Bus Frequency
+        wrmsr -p 1 0x620 0x2424
+          0x2424 = (min=0x24 << 8) | max=0x24
+          0x24 = 36 decimal -> 36 * 100 MHz = 3600 MHz (fixed)
+        ================================================================ -->
+  <uncore-frequency>
+    <cpu-ring-freq>
+      <cpu-id>1</cpu-id>
+      <!-- 0x24 = 36 -> 3600 MHz; min == max locks ring at fixed frequency -->
+      <min-ring-ratio>36</min-ring-ratio>
+      <max-ring-ratio>36</max-ring-ratio>
+    </cpu-ring-freq>
+  </uncore-frequency>
 
-         Two profiles are defined:
-           rt-core      : fixed 3100 MHz, C-states 0-3 disabled
-           housekeeping : powersave 400-2100 MHz, no C-state override
-         ================================================================ -->
-    <cpu-frequency>
+  <!-- ================================================================
+        Step 4: Platform QoS Resource Config L3 CAT CLOS assignment
+        wrmsr 0xc91 0xfc0   (CLOS 1 -> ways 6-11, configured externally
+        wrmsr 0xc90 0x03f    via intel-l3-cat-service.yang)
 
-      <!-- Profile 1: real-time core
-           cpupower -c N idle-set -d 0|1|2|3
-           cpupower -c N frequency-set __min 3100M __max 3100M -g performance -->
-      <frequency-profile>
-        <profile-id>rt-core</profile-id>
+        wrmsr -p 1 0xc8f 0x100000000  -> CLOS 1, RMID 0 (monitoring off)
+        wrmsr -p 2 0xc8f 0x100000000  -> CLOS 1, RMID 0 (monitoring off)
+        ================================================================ -->
+  <platform-qos-resource-config>
 
-        <frequency>
-          <governor>performance</governor>
-          <!-- Fixed frequency: min == max (required when governor=performance) -->
-          <min-freq-mhz>3100</min-freq-mhz>
-          <max-freq-mhz>3100</max-freq-mhz>
-        </frequency>
+    <!-- CPU 1: assigned to CLOS 1 (RT cache partition), no RMID monitoring -->
+    <cpu-pqr-assoc>
+      <cpu-id>1</cpu-id>
+      <!-- CLOS 1 -> bits [33:32] = 1 -> MSR value 0x1_00000000 -->
+      <class-of-service-id>1</class-of-service-id>
+      <resource-monitoring>
+        <!-- enabled=false -> RMID=0, no monitoring slot consumed -->
+        <enabled>false</enabled>
+      </resource-monitoring>
+    </cpu-pqr-assoc>
 
-        <idle>
-          <!-- No bulk reset needed; override all four states explicitly -->
-          <enable-all>false</enable-all>
-          <!-- Disable C-states 0=POLL, 1=C1, 2=C1E, 3=C3/C6 individually -->
-          <state-override>
-            <state-id>0</state-id>
-            <action>disable</action>
-          </state-override>
-          <state-override>
-            <state-id>1</state-id>
-            <action>disable</action>
-          </state-override>
-          <state-override>
-            <state-id>2</state-id>
-            <action>disable</action>
-          </state-override>
-          <state-override>
-            <state-id>3</state-id>
-            <action>disable</action>
-          </state-override>
-        </idle>
-      </frequency-profile>
+    <!-- CPU 2: assigned to CLOS 1 (RT cache partition), no RMID monitoring -->
+    <cpu-pqr-assoc>
+      <cpu-id>2</cpu-id>
+      <class-of-service-id>1</class-of-service-id>
+      <resource-monitoring>
+        <enabled>false</enabled>
+      </resource-monitoring>
+    </cpu-pqr-assoc>
 
-      <!-- Profile 2: housekeeping core
-           cpupower -c N frequency-set __min 400M __max 2100M -g powersave -->
-      <frequency-profile>
-        <profile-id>housekeeping</profile-id>
+  </platform-qos-resource-config>
 
-        <frequency>
-          <governor>powersave</governor>
-          <min-freq-mhz>400</min-freq-mhz>
-          <max-freq-mhz>2100</max-freq-mhz>
-        </frequency>
-
-        <idle>
-          <!-- Leave all C-states at the kernel default for housekeeping CPUs -->
-          <enable-all>false</enable-all>
-        </idle>
-      </frequency-profile>
-
-      <!-- Profile assignment: map each logical CPU to a profile -->
-      <profile-assignment>
-
-        <!-- CPU 0: housekeeping -->
-        <cpu-assignment>
-          <cpu-id>0</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-
-        <!-- CPU 1: real-time -->
-        <cpu-assignment>
-          <cpu-id>1</cpu-id>
-          <profile-ref>rt-core</profile-ref>
-        </cpu-assignment>
-
-        <!-- CPU 2: real-time -->
-        <cpu-assignment>
-          <cpu-id>2</cpu-id>
-          <profile-ref>rt-core</profile-ref>
-        </cpu-assignment>
-
-        <!-- CPUs 3-15: housekeeping -->
-        <cpu-assignment>
-          <cpu-id>3</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>4</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>5</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>6</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>7</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>8</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>9</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>10</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>11</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>12</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>13</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>14</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-        <cpu-assignment>
-          <cpu-id>15</cpu-id>
-          <profile-ref>housekeeping</profile-ref>
-        </cpu-assignment>
-
-      </profile-assignment>
-    </cpu-frequency>
-
-    <!-- ================================================================
-         Step 3: Uncore / Ring Bus Frequency
-         wrmsr -p 1 0x620 0x2424
-           0x2424 = (min=0x24 << 8) | max=0x24
-           0x24 = 36 decimal -> 36 * 100 MHz = 3600 MHz (fixed)
-         ================================================================ -->
-    <uncore-frequency>
-      <cpu-ring-freq>
-        <cpu-id>1</cpu-id>
-        <!-- 0x24 = 36 -> 3600 MHz; min == max locks ring at fixed frequency -->
-        <min-ring-ratio>36</min-ring-ratio>
-        <max-ring-ratio>36</max-ring-ratio>
-      </cpu-ring-freq>
-    </uncore-frequency>
-
-    <!-- ================================================================
-         Step 4: Platform QoS Resource Config L3 CAT CLOS assignment
-         wrmsr 0xc91 0xfc0   (CLOS 1 -> ways 6-11, configured externally
-         wrmsr 0xc90 0x03f    via intel-l3-cat-service.yang)
-
-         wrmsr -p 1 0xc8f 0x100000000  -> CLOS 1, RMID 0 (monitoring off)
-         wrmsr -p 2 0xc8f 0x100000000  -> CLOS 1, RMID 0 (monitoring off)
-         ================================================================ -->
-    <platform-qos-resource-config>
-
-      <!-- CPU 1: assigned to CLOS 1 (RT cache partition), no RMID monitoring -->
-      <cpu-pqr-assoc>
-        <cpu-id>1</cpu-id>
-        <!-- CLOS 1 -> bits [33:32] = 1 -> MSR value 0x1_00000000 -->
-        <class-of-service-id>1</class-of-service-id>
-        <resource-monitoring>
-          <!-- enabled=false -> RMID=0, no monitoring slot consumed -->
-          <enabled>false</enabled>
-        </resource-monitoring>
-      </cpu-pqr-assoc>
-
-      <!-- CPU 2: assigned to CLOS 1 (RT cache partition), no RMID monitoring -->
-      <cpu-pqr-assoc>
-        <cpu-id>2</cpu-id>
-        <class-of-service-id>1</class-of-service-id>
-        <resource-monitoring>
-          <enabled>false</enabled>
-        </resource-monitoring>
-      </cpu-pqr-assoc>
-
-    </platform-qos-resource-config>
-
-  </tcc-config>
-
-</tcc-configs>
+</tcc-config>
