@@ -484,7 +484,7 @@ def validate(ctx, config_file: str):
         sys.exit(exit_code)
 
 
-@tsn.command()
+@cli.command()
 @click.option(
     "--format",
     "-f",
@@ -498,9 +498,9 @@ def config_show(ctx, format: str):
     Show current CLI configuration settings.
 
     Example usage:
-        tch tsn config-show --format json
-        tch tsn config-show --format yaml
-        tch tsn config-show
+        tch config-show --format json
+        tch config-show --format yaml
+        tch config-show
 
     :param ctx: Click context object
     :param str format: Output format (table, json, yaml)
