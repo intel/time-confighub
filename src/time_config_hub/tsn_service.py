@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from time_config_hub.service_manager import ServiceManager
-from config_parser.common.exceptions import UniversalParserError
 from config_parser.tsn.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -27,7 +26,7 @@ from config_parser.tsn.tc_command import (
 )
 
 from .config_parser_service import ConfigParserService
-from .exceptions import TSNConfigError
+from .exceptions import ConfigParseError, TSNConfigError
 from .service_interfaces import TSNServiceInterface
 
 
@@ -109,10 +108,14 @@ class TSNService(TSNServiceInterface):
                 dry_run=dry_run,
             )
 
-        except TSNConfigError:
-            logger.error(f"Failed to apply configuration: {config_file}")
-            raise
+        except ConfigParseError as exc:
+            logger.error(f"Parsing failed for {config_file}: {exc}")
+            raise TSNConfigError(str(exc)) from exc
 
+        except TSNConfigError:
+            # Preserve original traceback/context for domain errors.
+            raise
+        
         except Exception as e:
             logger.exception(f"Unexpected error applying configuration: {config_file}")
             raise TSNConfigError("Unexpected error applying configuration") from e
@@ -201,11 +204,8 @@ class TSNService(TSNServiceInterface):
                 self.apply(file_path, dry_run=False)
                 logger.info(f"Configuration applied successfully from {file_path}")
 
-            except TSNConfigError:
-                logger.error(f"Error handling file event {event_type}: {file_path}")
-
-            except UniversalParserError:
-                logger.error(f"Parsing error for file event {event_type}: {file_path}")
+            except TSNConfigError as exc:
+                logger.error(f"TSN configuration error: {exc}")
 
             except Exception:
                 logger.exception(f"Error handling file event {event_type}: {file_path}")
