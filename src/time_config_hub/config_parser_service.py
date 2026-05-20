@@ -11,11 +11,6 @@ from the tsn_config_parser library.
 The ConfigParserService is designed to be used by both the TSN and TCC service implementations, 
 providing a shared utility for handling configuration files in a consistent manner across the Time Config Hub library.
 
-FUTURE ENHANCEMENTS:
-1) The UniversalParser is defined under tsn_config_parser, but is also used for TCC configurations. 
-   Consider renaming it to a more generic name (e.g., RealTimeConfigParser) and moving it to a 
-   common utilities module to better reflect its broader applicability.
-
 """
 
 from __future__ import annotations
@@ -27,7 +22,7 @@ from config_parser.common.exceptions import InvalidInputDataError, UniversalPars
 from config_parser.common.universal_parser import UniversalParser
 from yang_modules import DEFAULT_YANG_DIR
 
-from .exceptions import TSNConfigError
+from .exceptions import ConfigParseError
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +38,7 @@ class ConfigParserService:
         :param str config_file: Path to configuration file (XML or YAML)
         :return: UniversalParser instance
         :rtype: UniversalParser
-        :raises TSNConfigError: If parsing fails or yields no documents
+        :raises ConfigParseError: If parsing fails or yields no documents
         """
         yang_dir = self._app_config.get("General", {}).get(
             "YangModuleDirectory", DEFAULT_YANG_DIR
@@ -52,16 +47,16 @@ class ConfigParserService:
         try:
             docs = uparser.parse(file_path=config_file, file_type="auto")
         except InvalidInputDataError as exc:
-            raise TSNConfigError(
+            raise ConfigParseError(
                 f"Invalid configuration file {config_file}: {exc}"
             ) from exc
         except UniversalParserError as exc:
-            raise TSNConfigError(
+            raise ConfigParseError(
                 f"Failed to parse configuration {config_file}: {exc}"
             ) from exc
 
         if not docs:
-            raise TSNConfigError(
+            raise ConfigParseError(
                 f"No valid configuration documents found in {config_file}"
             )
 
@@ -79,7 +74,7 @@ class ConfigParserService:
             logger.info(f"Configuration file {config_file} is valid.")
             return True
         
-        except TSNConfigError:
+        except ConfigParseError:
             logger.error(f"Configuration file {config_file} is invalid.")
             return False
 
