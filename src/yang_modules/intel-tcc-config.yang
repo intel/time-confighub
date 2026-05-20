@@ -2,55 +2,53 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /*          
- * Module Structure
- * ================
- *
- * module intel-tcc-config
- * └── container tcc-configs
- *     └── list tcc-config [instance-id]
- *         ├── leaf instance-id
- *         ├── leaf instance-description
- *         ├── container cpu-scheduling          (tuna --isolate)
- *         │   └── list cpu-assignment [cpu-id]
- *         │       ├── leaf cpu-id
- *         │       └── leaf isolate
- *         │
- *         ├── container cpu-frequency           (cpupower)
- *         │   ├── list frequency-profile [profile-id]
- *         │   │   ├── leaf profile-id
- *         │   │   ├── container frequency
- *         │   │   │   ├── leaf governor         (enum: performance|powersave|
- *         │   │   │   │                                ondemand|schedutil|
- *         │   │   │   │                                userspace|conservative)
- *         │   │   │   ├── leaf min-freq-mhz
- *         │   │   │   ├── leaf max-freq-mhz
- *         │   │   │   └── must: perf -> min==max, max>=min
- *         │   │   └── container idle
- *         │   │       ├── leaf enable-all           (idle-set -E)
- *         │   │       ├── leaf disable-by-latency-us  (idle-set -D)
- *         │   │       └── list state-override [state-id]
- *         │   │           ├── leaf state-id
- *         │   │           └── leaf action           (disable | enable)
- *         │   └── container profile-assignment
- *         │       └── list cpu-assignment [cpu-id]
- *         │           ├── leaf cpu-id
- *         │           └── leaf profile-ref          (leafref -> frequency-profile)
- *         │
- *         ├── container uncore-frequency        (wrmsr 0x620)
- *         │   └── list cpu-ring-freq [cpu-id]
- *         │       ├── leaf cpu-id
- *         │       ├── leaf min-ring-ratio
- *         │       ├── leaf max-ring-ratio
- *         │       └── must: min == max
- *         │
- *         └── container platform-qos-resource-config   (wrmsr 0xc8f)
- *             └── list cpu-pqr-assoc [cpu-id]
- *                 ├── leaf cpu-id
- *                 ├── leaf class-of-service-id
- *                 └── container resource-monitoring
- *                     ├── leaf enabled
- *                     ├── leaf rmid-id              (when enabled=true)
- *                     └── leaf rmid-label           (when enabled=true)
+* Module Structure
+* ================
+*
+* module intel-tcc-config
+*	  └── leaf profile-id
+*   ├── leaf profile-description
+*   ├── container cpu-scheduling          (tuna --isolate)
+*   │   └── list cpu-assignment [cpu-id]
+*   │       ├── leaf cpu-id
+*   │       └── leaf isolate
+*   │
+*   ├── container cpu-frequency           (cpupower)
+*   │   ├── list frequency-profile [profile-id]
+*   │   │   ├── leaf profile-id
+*	  │   │   ├── container frequency
+*	  │   │   │   ├── leaf governor         (enum: performance|powersave|
+*	  │   │   │   │                                ondemand|schedutil|
+*	  │   │   │   │                                userspace|conservative)
+*	  │   │   │   ├── leaf min-freq-mhz
+*	  │   │   │   ├── leaf max-freq-mhz
+*	  │   │   │   └── must: perf -> min==max, max>=min
+*	  │   │   └── container idle
+*	  │   │       ├── leaf enable-all           (idle-set -E)
+*	  │   │       ├── leaf disable-by-latency-us  (idle-set -D)
+*	  │   │       └── list state-override [state-id]
+*	  │   │           ├── leaf state-id
+*	  │   │           └── leaf action           (disable | enable)
+*	  │   └── container profile-assignment
+*	  │       └── list cpu-assignment [cpu-id]
+*	  │           ├── leaf cpu-id
+*	  │           └── leaf profile-ref          (leafref -> frequency-profile)
+*	  │
+*	  ├── container uncore-frequency        (wrmsr 0x620)
+*	  │   └── list cpu-ring-freq [cpu-id]
+*	  │       ├── leaf cpu-id
+*	  │       ├── leaf min-ring-ratio
+*	  │       ├── leaf max-ring-ratio
+*	  │       └── must: min == max
+*	  │
+*	  └── container platform-qos-resource-config   (wrmsr 0xc8f)
+*		  └── list cpu-pqr-assoc [cpu-id]
+*			  ├── leaf cpu-id
+*			  ├── leaf class-of-service-id
+*		    └── container resource-monitoring
+*				  ├── leaf enabled
+*				  ├── leaf rmid-id              (when enabled=true)
+*				  └── leaf rmid-label           (when enabled=true)
  */
 
 module intel-tcc-config {
@@ -83,6 +81,11 @@ module intel-tcc-config {
     Vol. 3B, Section 17.19 (Intel RDT);
     Intel Time Coordinated Computing (TCC) User Guide
     (Public Version 1) -- 2026 edition";
+
+  revision 2026-05-20 {
+    description
+      "Remove multi-instance support for tcc-configs.";
+  }
 
   revision 2026-04-14 {
     description
@@ -212,335 +215,328 @@ module intel-tcc-config {
   // Top-level container
   // -----------------------------------------------------------------------
 
-  container tcc-configs {
+container tcc-config {
+
+  // -------------------------------------------------------------------
+  // TCC Configuration Profile information
+  // -------------------------------------------------------------------
+    
+  description
+    "A named TCC platform tuning configuration Profile.";
+    
+  leaf profile-id {
+    type string {
+      length "1..64";
+      pattern '[a-zA-Z_][a-zA-Z0-9_.\-]*';
+    }
     description
-      "Top-level container for one or more named Intel TCC platform tuning
-      configuration instances.";
+      "Unique identifier for this TCC configuration profile.
+      Examples: 'production-rt', 'rtc-testbench', 'debug'.";
+  }
 
-    // -------------------------------------------------------------------
-    // TCC Configuration Instance
-    // -------------------------------------------------------------------
+  leaf profile-description {
+    type string {
+      length "1..256";
+    }
+    description
+      "Human-readable description of this configuration profile.";
+  }    
 
-    list tcc-config {
-      key "instance-id";
+  // -------------------------------------------------------------------
+  // 1. CPU Scheduling (isolation)
+  // -------------------------------------------------------------------
+
+  container cpu-scheduling {
+    description
+      "Per-CPU isolation settings.  Isolated CPUs are removed from
+      the default scheduling and interrupt affinity masks so that
+      only explicitly assigned real-time tasks execute on them.";
+
+    list cpu-assignment {
+      key "cpu-id";
       description
-        "A named TCC platform tuning configuration instance. 
-        Multiple instances allow parallel profiles to be maintained.
-        Child containers must be applied in the order specified in the module description.";
+        "Isolation setting for a single logical CPU.";
 
-      leaf instance-id {
+      leaf cpu-id {
+        type cpu-id-type;
+        description
+          "Logical CPU to configure.";
+      }
+
+      leaf isolate {
+        type boolean;
+        default false;
+        description
+          "When true, the CPU is isolated from general-purpose scheduling
+          and default IRQ delivery.";
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // 2. CPU Frequency (C-state + frequency scaling)
+  // -------------------------------------------------------------------
+
+  container cpu-frequency {
+    description
+      "Per-CPU frequency scaling and idle state (C-state) configuration.
+      Settings are grouped into named profiles that can be shared
+      across multiple CPUs via profile-assignment.";
+
+    list frequency-profile {
+      key "profile-id";
+      description
+        "A named frequency and idle configuration profile.";
+
+      leaf profile-id {
         type string {
           length "1..64";
-          pattern '[a-zA-Z_][a-zA-Z0-9_.\-]*';
         }
         description
-          "Unique identifier for this TCC configuration instance.
-          Examples: 'production-rt', 'rtc-testbench', 'debug'.";
+          "Unique human-readable identifier for this profile.
+          Examples: 'rt-core', 'housekeeping', 'fixed-3100MHz'.";
       }
 
-      leaf instance-description {
-        type string {
-          length "1..256";
-        }
+      container frequency {
         description
-          "Human-readable description of this configuration instance.";
+          "CPU frequency scaling parameters for this profile.";
+
+        must "governor != 'performance' or min-freq-mhz = max-freq-mhz" {
+          error-message
+            "When governor is 'performance', min-freq-mhz must equal
+            max-freq-mhz to achieve a fixed operating frequency.";
+        }
+
+        must "max-freq-mhz >= min-freq-mhz" {
+          error-message
+            "max-freq-mhz must be greater than or equal to min-freq-mhz.";
+        }
+
+        leaf governor {
+          type governor-type;
+          mandatory true;
+          description
+            "Frequency scaling governor to apply.
+            Maps to 'cpupower frequency-set -g <governor>'.";
+        }
+
+        leaf min-freq-mhz {
+          type frequency-mhz-type;
+          mandatory true;
+          description
+            "Minimum CPU operating frequency in MHz.
+            Maps to 'cpupower frequency-set --min <N>M'.";
+        }
+
+        leaf max-freq-mhz {
+          type frequency-mhz-type;
+          mandatory true;
+          description
+            "Maximum CPU operating frequency in MHz.
+            Maps to 'cpupower frequency-set --max <N>M'.";
+        }
       }
 
-    // -------------------------------------------------------------------
-    // 1. CPU Scheduling (isolation)
-    // -------------------------------------------------------------------
+      container idle {
+        description
+          "CPU idle state (C-state) control for this profile.
+          Three mechanisms are applied in order: enable-all first,
+          disable-by-latency-us second, and state-override last.
+          The available C-state indices are implementation-specific.";
 
-    container cpu-scheduling {
+        leaf enable-all {
+          type boolean;
+          default false;
+          description
+            "When true, re-enable all C-states before applying
+            any disable operations.
+            Maps to 'cpupower idle-set -E'.";
+        }
+
+        leaf disable-by-latency-us {
+          type uint32;
+          units "microseconds";
+          description
+            "Disable all C-states whose exit latency exceeds this
+            value in microseconds.
+            Maps to 'cpupower idle-set -D <value>'.";
+        }
+
+        list state-override {
+          key "state-id";
+          description
+            "Per-state enable or disable override.  Entries here
+            take precedence over enable-all and
+            disable-by-latency-us.";
+
+          leaf state-id {
+            type uint8 {
+              range "0..31";
+            }
+            description
+              "C-state index to override.  The mapping of indices
+              to states is implementation-specific.";
+          }
+
+          leaf action {
+            type state-action-type;
+            mandatory true;
+            description
+              "Action to apply to this C-state.";
+          }
+        }
+      }
+    }
+
+    container profile-assignment {
       description
-        "Per-CPU isolation settings.  Isolated CPUs are removed from
-        the default scheduling and interrupt affinity masks so that
-        only explicitly assigned real-time tasks execute on them.";
+        "Maps logical CPUs to frequency profiles.";
 
       list cpu-assignment {
         key "cpu-id";
         description
-          "Isolation setting for a single logical CPU.";
+          "Assigns a logical CPU to a named frequency profile.";
 
         leaf cpu-id {
           type cpu-id-type;
           description
-            "Logical CPU to configure.";
+            "Logical CPU to assign.
+            Maps to the '-c <N>' argument of cpupower(1).";
         }
 
-        leaf isolate {
-          type boolean;
-          default false;
+        leaf profile-ref {
+          type leafref {
+            path "../../../frequency-profile/profile-id";
+          }
+          mandatory true;
           description
-            "When true, the CPU is isolated from general-purpose scheduling
-            and default IRQ delivery.";
+            "Reference to the frequency-profile that governs this
+            CPU's frequency scaling and idle state policy.";
         }
       }
     }
+  }
 
-    // -------------------------------------------------------------------
-    // 2. CPU Frequency (C-state + frequency scaling)
-    // -------------------------------------------------------------------
+  // -------------------------------------------------------------------
+  // 3. Uncore / Ring Bus Frequency
+  // -------------------------------------------------------------------
 
-    container cpu-frequency {
+  container uncore-frequency {
+    description
+      "Per-CPU ring/uncore bus frequency configuration.
+      Locking the ring frequency eliminates latency variation
+      caused by dynamic frequency scaling transitions.";
+
+    list cpu-ring-freq {
+      key "cpu-id";
       description
-        "Per-CPU frequency scaling and idle state (C-state) configuration.
-        Settings are grouped into named profiles that can be shared
-        across multiple CPUs via profile-assignment.";
+        "Ring frequency setting for one logical CPU.";
 
-      list frequency-profile {
-        key "profile-id";
+      must "min-ring-ratio = max-ring-ratio" {
+        error-message
+          "min-ring-ratio must equal max-ring-ratio to lock the
+          ring bus at a constant frequency.";
+      }
+
+      leaf cpu-id {
+        type cpu-id-type;
         description
-          "A named frequency and idle configuration profile.";
+          "Logical CPU to configure.
+          Maps to the '-p <N>' argument of wrmsr(1).";
+      }
 
-        leaf profile-id {
+      leaf min-ring-ratio {
+        type ring-ratio-type;
+        mandatory true;
+        description
+          "Minimum ring bus frequency ratio.
+          Maps to bits [15:8] of MSR 0x620.";
+      }
+
+      leaf max-ring-ratio {
+        type ring-ratio-type;
+        mandatory true;
+        description
+          "Maximum ring bus frequency ratio.
+          Maps to bits [7:0] of MSR 0x620.";
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // 4. Platform QoS Resource Configuration (L3 CAT + CMT/MBM)
+  // -------------------------------------------------------------------
+
+  container platform-qos-resource-config {
+    description
+      "Per-CPU L3 cache allocation (Class of Service) assignment
+      and optional cache/memory bandwidth monitoring configuration
+      via Intel Resource Director Technology (RDT).";
+
+    list cpu-pqr-assoc {
+      key "cpu-id";
+      description
+        "CLOS and monitoring assignment for one logical CPU.";
+
+      leaf cpu-id {
+        type cpu-id-type;
+        description
+          "Logical CPU to configure.
+          Maps to the '-p <N>' argument of wrmsr(1).";
+      }
+
+      leaf class-of-service-id {
+        type clos-id-type;
+        mandatory true;
+        description
+          "Class of Service (CLOS) to assign to this CPU.
+          Determines which L3 cache-way allocation bitmask
+          applies to this CPU's memory accesses.
+          Maps to bits [33:32] of IA32_PQR_ASSOC (MSR 0xc8f).";
+      }
+
+      container resource-monitoring {
+        description
+          "Optional L3 cache occupancy and memory bandwidth
+          monitoring for this CPU via Intel RDT.";
+
+        leaf enabled {
+          type boolean;
+          default false;
+          description
+            "When true, L3 cache and memory bandwidth monitoring
+            is active for this CPU.  When false (default), no
+            monitoring slot is consumed.";
+        }
+
+        leaf rmid-id {
+          when "../enabled = 'true'" {
+            description
+              "Only present when monitoring is enabled.";
+          }
+          type rmid-type;
+          mandatory true;
+          description
+            "Resource Monitoring ID (RMID) to assign to this CPU.
+            Maps to bits [9:0] of IA32_PQR_ASSOC (MSR 0xc8f).";
+        }
+
+        leaf rmid-label {
+          when "../enabled = 'true'" {
+            description
+              "Only present when monitoring is enabled.";
+          }
           type string {
             length "1..64";
           }
           description
-            "Unique human-readable identifier for this profile.
-            Examples: 'rt-core', 'housekeeping', 'fixed-3100MHz'.";
-        }
-
-        container frequency {
-          description
-            "CPU frequency scaling parameters for this profile.";
-
-          must "governor != 'performance' or min-freq-mhz = max-freq-mhz" {
-            error-message
-              "When governor is 'performance', min-freq-mhz must equal
-              max-freq-mhz to achieve a fixed operating frequency.";
-          }
-
-          must "max-freq-mhz >= min-freq-mhz" {
-            error-message
-              "max-freq-mhz must be greater than or equal to min-freq-mhz.";
-          }
-
-          leaf governor {
-            type governor-type;
-            mandatory true;
-            description
-              "Frequency scaling governor to apply.
-              Maps to 'cpupower frequency-set -g <governor>'.";
-          }
-
-          leaf min-freq-mhz {
-            type frequency-mhz-type;
-            mandatory true;
-            description
-              "Minimum CPU operating frequency in MHz.
-              Maps to 'cpupower frequency-set --min <N>M'.";
-          }
-
-          leaf max-freq-mhz {
-            type frequency-mhz-type;
-            mandatory true;
-            description
-              "Maximum CPU operating frequency in MHz.
-              Maps to 'cpupower frequency-set --max <N>M'.";
-          }
-        }
-
-        container idle {
-          description
-            "CPU idle state (C-state) control for this profile.
-            Three mechanisms are applied in order: enable-all first,
-            disable-by-latency-us second, and state-override last.
-            The available C-state indices are implementation-specific.";
-
-          leaf enable-all {
-            type boolean;
-            default false;
-            description
-              "When true, re-enable all C-states before applying
-              any disable operations.
-              Maps to 'cpupower idle-set -E'.";
-          }
-
-          leaf disable-by-latency-us {
-            type uint32;
-            units "microseconds";
-            description
-              "Disable all C-states whose exit latency exceeds this
-              value in microseconds.
-              Maps to 'cpupower idle-set -D <value>'.";
-          }
-
-          list state-override {
-            key "state-id";
-            description
-              "Per-state enable or disable override.  Entries here
-              take precedence over enable-all and
-              disable-by-latency-us.";
-
-            leaf state-id {
-              type uint8 {
-                range "0..31";
-              }
-              description
-                "C-state index to override.  The mapping of indices
-                to states is implementation-specific.";
-            }
-
-            leaf action {
-              type state-action-type;
-              mandatory true;
-              description
-                "Action to apply to this C-state.";
-            }
-          }
-        }
-      }
-
-      container profile-assignment {
-        description
-          "Maps logical CPUs to frequency profiles.";
-
-        list cpu-assignment {
-          key "cpu-id";
-          description
-            "Assigns a logical CPU to a named frequency profile.";
-
-          leaf cpu-id {
-            type cpu-id-type;
-            description
-              "Logical CPU to assign.
-              Maps to the '-c <N>' argument of cpupower(1).";
-          }
-
-          leaf profile-ref {
-            type leafref {
-              path "../../../frequency-profile/profile-id";
-            }
-            mandatory true;
-            description
-              "Reference to the frequency-profile that governs this
-              CPU's frequency scaling and idle state policy.";
-          }
+            "Human-readable label for this monitoring slot.
+            Used for documentation and tooling display only;
+            has no effect on the hardware configuration.";
         }
       }
     }
-
-    // -------------------------------------------------------------------
-    // 3. Uncore / Ring Bus Frequency
-    // -------------------------------------------------------------------
-
-    container uncore-frequency {
-      description
-        "Per-CPU ring/uncore bus frequency configuration.
-        Locking the ring frequency eliminates latency variation
-        caused by dynamic frequency scaling transitions.";
-
-      list cpu-ring-freq {
-        key "cpu-id";
-        description
-          "Ring frequency setting for one logical CPU.";
-
-        must "min-ring-ratio = max-ring-ratio" {
-          error-message
-            "min-ring-ratio must equal max-ring-ratio to lock the
-            ring bus at a constant frequency.";
-        }
-
-        leaf cpu-id {
-          type cpu-id-type;
-          description
-            "Logical CPU to configure.
-            Maps to the '-p <N>' argument of wrmsr(1).";
-        }
-
-        leaf min-ring-ratio {
-          type ring-ratio-type;
-          mandatory true;
-          description
-            "Minimum ring bus frequency ratio.
-            Maps to bits [15:8] of MSR 0x620.";
-        }
-
-        leaf max-ring-ratio {
-          type ring-ratio-type;
-          mandatory true;
-          description
-            "Maximum ring bus frequency ratio.
-            Maps to bits [7:0] of MSR 0x620.";
-        }
-      }
-    }
-
-    // -------------------------------------------------------------------
-    // 4. Platform QoS Resource Configuration (L3 CAT + CMT/MBM)
-    // -------------------------------------------------------------------
-
-    container platform-qos-resource-config {
-      description
-        "Per-CPU L3 cache allocation (Class of Service) assignment
-        and optional cache/memory bandwidth monitoring configuration
-        via Intel Resource Director Technology (RDT).";
-
-      list cpu-pqr-assoc {
-        key "cpu-id";
-        description
-          "CLOS and monitoring assignment for one logical CPU.";
-
-        leaf cpu-id {
-          type cpu-id-type;
-          description
-            "Logical CPU to configure.
-            Maps to the '-p <N>' argument of wrmsr(1).";
-        }
-
-        leaf class-of-service-id {
-          type clos-id-type;
-          mandatory true;
-          description
-            "Class of Service (CLOS) to assign to this CPU.
-            Determines which L3 cache-way allocation bitmask
-            applies to this CPU's memory accesses.
-            Maps to bits [33:32] of IA32_PQR_ASSOC (MSR 0xc8f).";
-        }
-
-        container resource-monitoring {
-          description
-            "Optional L3 cache occupancy and memory bandwidth
-            monitoring for this CPU via Intel RDT.";
-
-          leaf enabled {
-            type boolean;
-            default false;
-            description
-              "When true, L3 cache and memory bandwidth monitoring
-              is active for this CPU.  When false (default), no
-              monitoring slot is consumed.";
-          }
-
-          leaf rmid-id {
-            when "../enabled = 'true'" {
-              description
-                "Only present when monitoring is enabled.";
-            }
-            type rmid-type;
-            mandatory true;
-            description
-              "Resource Monitoring ID (RMID) to assign to this CPU.
-              Maps to bits [9:0] of IA32_PQR_ASSOC (MSR 0xc8f).";
-          }
-
-          leaf rmid-label {
-            when "../enabled = 'true'" {
-              description
-                "Only present when monitoring is enabled.";
-            }
-            type string {
-              length "1..64";
-            }
-            description
-              "Human-readable label for this monitoring slot.
-              Used for documentation and tooling display only;
-              has no effect on the hardware configuration.";
-          }
-        }
-      }
-    }
-    } // list tcc-config
-  } // container tcc-configs
+  }
+} 
 }
+
