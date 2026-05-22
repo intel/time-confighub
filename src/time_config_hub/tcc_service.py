@@ -52,7 +52,9 @@ class TCCService(TCCServiceInterface):
             logger.info(f"TCC configuration applied successfully: {config_file}")
 
         except ConfigParseError as exc:
-            raise TCCConfigError(str(exc)) from exc
+            logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
+            raise TCCConfigError("TCC configuration file is invalid") from exc
+
         except Exception as exc:
             logger.exception("Failed to apply TCC configuration")
             raise TCCConfigError("Failed to apply TCC configuration") from exc
