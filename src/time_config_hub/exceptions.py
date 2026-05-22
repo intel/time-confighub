@@ -8,56 +8,61 @@ This module defines all custom exceptions used throughout the Time Config Hub.
 
 The exception hierarchy is:
 
-- TSNConfigError: Base exception for all TSN-related errors
-  - ConfigParseError: Configuration file parsing failures
-  - TCCommandError: Traffic control command execution failures
-  - InterfaceError: Network interface operation failures
-  - ValidationError: Configuration validation failures
+Exception
+|_ TCHConfigError (base for all TCH errors)
+    |_ CommonConfigError (base for shared/common configuration concerns)
+        |_ ConfigParseError (configuration file parsing failures)
+        |_ ValidationError (configuration validation failures)
+    |_ TSNConfigError (base for TSN domain errors)
+        |_ TCCommandError (traffic control command execution failures)
+        |_ InterfaceError (network interface operation failures)
+    |_ TCCConfigError (base for TCC domain errors)
+    |_ ServiceError (service management errors)
 
-All exceptions inherit from TSNConfigError to allow for broad exception handling
+All exceptions inherit from TCHConfigError to allow for broad exception handling
 while still providing specific error types for detailed error handling.
 """
 
 
-class TSNConfigError(Exception):
+class TCHConfigError(Exception):
     """
-    Base exception for TSN configuration errors.
-
-    All other TSN-related exceptions inherit from this base class.
+    Base exception for all Time Config Hub errors.
+    All other exceptions in the Time Config Hub should inherit from this base class.
     """
-
     pass
 
 
-class TCCConfigError(Exception):
-    """
-    Base exception for TCC configuration errors.
-
-    All other TCC-related exceptions inherit from this base class.
-    """
-
+class CommonConfigError(TCHConfigError):
+    """Base exception for shared/common configuration concerns.""" 
     pass
 
 
-class ServiceError(TSNConfigError):
-    """
-    Exception raised for errors related to service management.
-
-    Indicates issues with starting, stopping, or managing the TSN configuration
-    daemon service.
-    """
-
-    pass
-
-
-class ConfigParseError(TSNConfigError):
+class ConfigParseError(CommonConfigError):
     """
     Exception raised when configuration file parsing fails.
 
     Indicates that a configuration file could not be parsed due to
     syntax errors or invalid format.
     """
+    pass
 
+
+class ValidationError(CommonConfigError):
+    """
+    Exception raised when configuration validation fails.
+
+    Indicates that a configuration file or parameters failed
+    validation checks.
+    """
+    pass
+
+
+class TSNConfigError(TCHConfigError):
+    """
+    Base exception for TSN domain errors.
+
+    All other TSN-related exceptions inherit from this base class.
+    """
     pass
 
 
@@ -68,7 +73,6 @@ class TCCommandError(TSNConfigError):
     Indicates that a traffic control (tc) command failed to execute
     or returned an error status.
     """
-
     pass
 
 
@@ -79,16 +83,23 @@ class InterfaceError(TSNConfigError):
     Indicates problems with network interface detection, validation,
     or configuration.
     """
-
     pass
 
 
-class ValidationError(TSNConfigError):
+class ServiceError(TCHConfigError):
     """
-    Exception raised when configuration validation fails.
+    Exception raised for errors related to service management.
 
-    Indicates that a configuration file or parameters failed
-    validation checks.
+    Indicates issues with starting, stopping, or managing the TCH configuration
+    daemon service.
     """
+    pass
 
+
+class TCCConfigError(TCHConfigError):
+    """
+    Base exception for TCC domain errors.
+
+    All other TCC-related exceptions inherit from this base class.
+    """
     pass
