@@ -231,7 +231,7 @@ container tcc-config {
     }
     description
       "Unique identifier for this TCC configuration profile.
-      Examples: 'production-rt', 'rtc-testbench', 'debug'.";
+      Examples: 'production-rt', 'debug'.";
   }
 
   leaf profile-description {

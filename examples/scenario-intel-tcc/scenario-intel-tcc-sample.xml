@@ -4,11 +4,12 @@
 <tcc-config xmlns="urn:intel:params:xml:ns:yang:intel-tcc-config">
 
   <!-- ================================================================
-       Profile: rtc-testbench
-       Derived from RTC-Testbench busypolling_1ms_rtworkload tuning script
+       Profile: intel-tcc-sample
+       Description: Sample profile for Intel TCC on 16-core i226 platform
+       Purpose: Demonstrate CPU isolation, frequency control, uncore tuning, and PQR config
        ================================================================ -->
-  <profile-id>rtc-testbench</profile-id>
-  <profile-description>RTC Test Bench busypolling 1ms RT workload tuning profile (16-core i226 platform)</profile-description>
+  <profile-id>intel-tcc-sample</profile-id>
+  <profile-description>Intel TCC sample tuning profile (16-core i226 platform)</profile-description>
 
   <!-- ================================================================
         Step 1: CPU Scheduling Isolation
