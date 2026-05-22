@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional, Set
 import defusedxml.ElementTree as SafeET
 import libyang
 
-from tsn_config_parser.exceptions import InvalidInputDataError, UniversalParserError
-from tsn_config_parser.GE_dictionary import GE_Dictionary
+from config_parser.common.exceptions import InvalidInputDataError, UniversalParserError
+from config_parser.tsn.GE_dictionary import GE_Dictionary 
 from yang_modules import DEFAULT_YANG_DIR, load_yang_module
 
 def _collect_json_prefixes(node: Any, keywords: List[str]) -> Set[str]:
