@@ -21,9 +21,16 @@ __author__ = "Intel"
 __license__ = "BSD"
 
 from .config_reader import ConfigReader
-from .core import TIMEConfigHub
+from .time_hub_service import TimeHubService
+from .service_interfaces import TCCServiceInterface, TSNServiceInterface
+from .tcc_service import TCCService
+from .tsn_service import TSNService
 
 __all__ = [
-    "TIMEConfigHub",
     "ConfigReader",
+    "TimeHubService",
+    "TSNServiceInterface",
+    "TCCServiceInterface",
+    "TSNService",
+    "TCCService",
 ]
