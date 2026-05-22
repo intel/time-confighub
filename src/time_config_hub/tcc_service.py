@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .config_parser_service import ConfigParserService
-from .exceptions import TCCConfigError, TSNConfigError
+from .exceptions import ConfigParseError, TCCConfigError
 from .service_interfaces import TCCServiceInterface
 from .tcc_state_store import TCCStateStore
 
@@ -51,10 +51,10 @@ class TCCService(TCCServiceInterface):
             self._state_store.save_applied_config(config_file)
             logger.info(f"TCC configuration applied successfully: {config_file}")
 
-        except TSNConfigError as exc:
-            raise TCCConfigError(str(exc)) from exc
-        except TCCConfigError:
-            raise
+        except ConfigParseError as exc:
+            logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
+            raise TCCConfigError("TCC configuration file is invalid") from exc
+            
         except Exception as exc:
             logger.exception("Failed to apply TCC configuration")
             raise TCCConfigError("Failed to apply TCC configuration") from exc
@@ -70,7 +70,7 @@ class TCCService(TCCServiceInterface):
             self._parser.parse_config(config_file)
             logger.info(f"TCC configuration file {config_file} is valid.")
             return True
-        except TSNConfigError as exc:
+        except ConfigParseError as exc:
             logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
             return False
         except Exception:
