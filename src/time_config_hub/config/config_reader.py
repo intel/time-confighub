@@ -30,7 +30,7 @@ from xml.etree.ElementTree import SubElement
 import defusedxml.cElementTree as SafeET
 import yaml
 
-from .definitions import TCH_APP_CONFIG_FILE
+from .constants import TCH_APP_CONFIG_FILE
 
 logger = logging.getLogger(__name__)
 

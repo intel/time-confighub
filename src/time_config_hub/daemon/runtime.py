@@ -16,7 +16,7 @@ import time
 from watchdog.observers import Observer
 
 from time_config_hub.config.config_reader import load_app_config
-from time_config_hub.config.logging_setup import setup_logging
+from time_config_hub.config.logging import setup_logging
 
 from .watch_handler import WatchHandler
 

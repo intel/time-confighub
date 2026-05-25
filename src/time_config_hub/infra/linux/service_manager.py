@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from importlib import resources
 
-from time_config_hub.config.definitions import TCH_DAEMON_SERVICE_FILE
+from time_config_hub.config.constants import TCH_DAEMON_SERVICE_FILE
 from time_config_hub.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
