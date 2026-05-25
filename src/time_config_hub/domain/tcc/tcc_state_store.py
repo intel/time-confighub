@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-from .exceptions import TCCConfigError
+from time_config_hub.exceptions import TCCConfigError
 
 
 class TCCStateStore:

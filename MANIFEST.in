@@ -3,6 +3,6 @@
 
 include README.md
 include LICENSE
-include src/time_config_hub/templates/*.service
+include src/time_config_hub/infra/linux/templates/*.service
 global-exclude __pycache__
 global-exclude *.py[co]

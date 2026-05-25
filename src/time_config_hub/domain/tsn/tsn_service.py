@@ -12,8 +12,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from time_config_hub.service_manager import ServiceManager
-from config_parser.tsn.tc_command import (
+from time_config_hub.infra.linux.service_manager import ServiceManager
+from time_config_hub.infra.linux.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
     create_tc_qdisc_gcl_command,
@@ -25,9 +25,9 @@ from config_parser.tsn.tc_command import (
     show_tc_egress_filters,
 )
 
-from .config_parser_service import ConfigParserService
-from .exceptions import ConfigParseError, TSNConfigError
-from .service_interfaces import TSNServiceInterface
+from time_config_hub.domain.common.config_parser_service import ConfigParserService
+from time_config_hub.exceptions import ConfigParseError, TSNConfigError
+from time_config_hub.orchestrator.service_interfaces import TSNServiceInterface
 
 
 logger = logging.getLogger(__name__)

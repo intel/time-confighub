@@ -11,7 +11,7 @@ PCI ID strings in the format 'VENDOR:DEVICE' (e.g., '8086:125B').
 import logging
 from typing import List, Type
 
-from ..utils.pci_utils import PCIUtils
+from ...utils.pci_utils import PCIUtils
 
 logger = logging.getLogger(__name__)
 

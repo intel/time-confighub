@@ -14,7 +14,7 @@ Note:
 
 import logging
 
-from .base_command import BaseCommand
+from time_config_hub.infra.base_command import BaseCommand
 
 logger = logging.getLogger(__name__)
 

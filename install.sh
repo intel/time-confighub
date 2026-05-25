@@ -25,7 +25,7 @@ readonly DEFAULT_LOG_DIR="/var/log/tch"
 
 readonly PROJECT_CONFIG_FILE="conf/tch_app.conf"
 
-readonly SYSTEMD_SERVICE_TEMPLATE="src/time_config_hub/templates/tch.service"
+readonly SYSTEMD_SERVICE_TEMPLATE="src/time_config_hub/infra/linux/templates/tch.service"
 readonly SYSTEMD_SERVICE_DEST="/etc/systemd/system/tch.service"
 
 readonly BUILD_DIR="build"
@@ -165,7 +165,8 @@ install_python_package() {
     "${VENV_DIR}/bin/python" -m pip install --upgrade dist/*.whl
 
     # Copy YANG modules to /etc/tch for runtime lookup
-    cp -r src/yang_modules/* "${DEFAULT_YANG_DIR}/"
+    cp -r src/time_config_hub/resources/yang_modules/standards/* "${DEFAULT_YANG_DIR}/"
+    cp -r src/time_config_hub/resources/yang_modules/vendor/intel/* "${DEFAULT_YANG_DIR}/"
 
     # Expose a stable CLI path for users
     mkdir -p "$(dirname "${TCH_SYMLINK_PATH}")"

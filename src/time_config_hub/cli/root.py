@@ -27,12 +27,12 @@ from typing import Optional
 import click
 import yaml
 
-from . import __version__
-from .config_reader import load_app_config
-from .time_hub_service import TimeHubService
-from .exceptions import TCCConfigError, TSNConfigError
-from .exit_codes import TchExitCode
-from .logging_setup import setup_logging
+from .. import __version__
+from ..config.config_reader import load_app_config
+from time_config_hub.orchestrator.time_hub_service import TimeHubService
+from ..exceptions import TCCConfigError, TSNConfigError
+from time_config_hub.cli.exit_codes import TchExitCode
+from ..config.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
 
