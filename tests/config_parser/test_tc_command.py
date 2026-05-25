@@ -69,7 +69,7 @@ def test_clsact_exists_false(monkeypatch):
     assert _clsact_exists("enp170s0") is False
 
 
-@patch("tsn_config_parser.tc_command._clsact_exists", return_value=False)
+@patch("time_config_hub.infra.linux.tc_command._clsact_exists", return_value=False)
 def test_generate_tc_filter_commands_adds_clsact(
     mock_clsact, sample_vlan_time_aware_info
 ):
@@ -89,7 +89,7 @@ def test_generate_tc_filter_commands_adds_clsact(
     assert any("enp170s0" in c for c in cmds)
 
 
-@patch("tsn_config_parser.tc_command._clsact_exists", return_value=True)
+@patch("time_config_hub.infra.linux.tc_command._clsact_exists", return_value=True)
 def test_generate_tc_filter_commands_skips_clsact(
     mock_clsact, sample_vlan_time_aware_info
 ):
@@ -143,7 +143,7 @@ def sample_vlan_non_time_aware_info():
     }
 
 
-@patch("tsn_config_parser.tc_command._clsact_exists", return_value=False)
+@patch("time_config_hub.infra.linux.tc_command._clsact_exists", return_value=False)
 def test_generate_non_time_aware_vlan_push_commands(
     _mock_clsact, sample_vlan_non_time_aware_info
 ):
@@ -178,7 +178,7 @@ def test_generate_non_time_aware_vlan_push_commands(
     assert all("action skbedit priority" in c for c in filter_cmds)
 
 
-@patch("tsn_config_parser.tc_command._clsact_exists", return_value=False)
+@patch("time_config_hub.infra.linux.tc_command._clsact_exists", return_value=False)
 def test_non_time_aware_vlan_handles_missing_fields(_mock_clsact):
     """Ensure missing optional fields do not break command generation."""
 

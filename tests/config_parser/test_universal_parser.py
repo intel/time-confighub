@@ -87,7 +87,7 @@ def up_module(monkeypatch):
     """Load universal_parser with libyang monkeypatched to the stub."""
     stub = _make_libyang_stub()
     monkeypatch.setitem(sys.modules, "libyang", stub)
-    import yang_modules
+    import time_config_hub.resources.yang_modules as yang_modules
 
     importlib.reload(yang_modules)
     import time_config_hub.utils.yang_parser.universal_parser as universal_parser

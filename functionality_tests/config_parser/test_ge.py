@@ -16,7 +16,7 @@ Note: Update the file_path variable to point to your test file.
 
 from colorama import Fore, Style
 
-from config_parser.tsn.tc_command import (
+from time_config_hub.infra.linux.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
     create_tc_qdisc_gcl_command,
