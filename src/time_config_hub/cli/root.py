@@ -32,7 +32,7 @@ from ..config.config_reader import load_app_config
 from time_config_hub.orchestrator.time_hub_service import TimeHubService
 from ..exceptions import TCCConfigError, TSNConfigError
 from time_config_hub.cli.exit_codes import TchExitCode
-from ..config.logging_setup import setup_logging
+from ..config.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
