@@ -23,11 +23,11 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .config_reader import load_app_config
+from time_config_hub.config.config_reader import load_app_config
 from .service_interfaces import TCCServiceInterface, TSNServiceInterface
-from .service_manager import ServiceManager
-from .tcc_service import TCCService
-from .tsn_service import TSNService
+from time_config_hub.infra.linux.service_manager import ServiceManager
+from time_config_hub.domain.tcc.tcc_service import TCCService
+from time_config_hub.domain.tsn.tsn_service import TSNService
 
 logger = logging.getLogger(__name__)
 

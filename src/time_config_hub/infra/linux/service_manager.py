@@ -14,8 +14,8 @@ import shutil
 import subprocess
 from importlib import resources
 
-from .definitions import TCH_DAEMON_SERVICE_FILE
-from .exceptions import ServiceError
+from time_config_hub.config.definitions import TCH_DAEMON_SERVICE_FILE
+from time_config_hub.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ def setup_service_file():
     """
     logger.debug("Setting up systemd service file...")
     try:
-        # Locate the service file inside your package
-        src = resources.files("time_config_hub.templates") / SERVICE_NAME
+        # Locate the Linux-specific service template inside package resources
+        src = resources.files("time_config_hub.infra.linux.templates") / SERVICE_NAME
 
         # Destination path
         dst = TCH_DAEMON_SERVICE_FILE

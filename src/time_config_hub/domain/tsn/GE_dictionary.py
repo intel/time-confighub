@@ -8,7 +8,7 @@ GE Dictionary Helper for TSN XML/YAML/JSON configuration.
 
 from typing import Any, Dict, List
 
-from config_parser.common.exceptions import InvalidInputDataError
+from time_config_hub.utils.yang_parser.exceptions import InvalidInputDataError
 
 
 class GE_Dictionary:
@@ -640,7 +640,7 @@ if __name__ == "__main__":
     import json
     import sys
 
-    from config_parser.common.universal_parser import UniversalParser
+    from time_config_hub.utils.yang_parser.universal_parser import UniversalParser
 
     if len(sys.argv) < 2:
         print("Usage: python GE_Dictionary.py <path-to-xml/yaml/json>")

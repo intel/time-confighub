@@ -18,7 +18,7 @@ real-time applications and can parse files
 containing multiple configuration documents or root elements.
 """
 
-from .common.universal_parser import UniversalParser
+from time_config_hub.utils.yang_parser.universal_parser import UniversalParser
 
 __all__ = [
     "UniversalParser",

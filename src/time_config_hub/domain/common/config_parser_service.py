@@ -18,11 +18,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from config_parser.common.exceptions import InvalidInputDataError, UniversalParserError
-from config_parser.common.universal_parser import UniversalParser
-from yang_modules import DEFAULT_YANG_DIR
+from time_config_hub.utils.yang_parser.exceptions import InvalidInputDataError, UniversalParserError
+from time_config_hub.utils.yang_parser.universal_parser import UniversalParser
+from time_config_hub.resources.yang_modules import DEFAULT_YANG_DIR
 
-from .exceptions import ConfigParseError
+from time_config_hub.exceptions import ConfigParseError
 
 logger = logging.getLogger(__name__)
 

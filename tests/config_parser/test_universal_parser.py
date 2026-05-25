@@ -90,7 +90,7 @@ def up_module(monkeypatch):
     import yang_modules
 
     importlib.reload(yang_modules)
-    import tsn_config_parser.universal_parser as universal_parser
+    import time_config_hub.utils.yang_parser.universal_parser as universal_parser
 
     importlib.reload(universal_parser)
     return universal_parser

@@ -12,6 +12,7 @@ authors = [
     { name = "Ahmad Tarmizi, Noor Azura", email = "noor.azura.ahmad.tarmizi@intel.com" },
     { name = "Koay, Eric Eng Keong", email = "eng.keong.koay@intel.com" },
     { name = "Liow, Shi Jie Donavan", email = "shi.jie.donavan.liow@intel.com" },
+    { name = "Su, Hea Ming", email = "hea.ming.su@intel.com" },
 ]
 description = "Time Config Hub for Intel TSN-capable hardware"
 readme = "README.md"
@@ -48,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-tch = "time_config_hub.cli:main"
+tch = "time_config_hub.cli.root:main"
 
 [project.urls]
 Homepage = "https://github.com/intel/time-confighub"
@@ -57,7 +58,7 @@ Homepage = "https://github.com/intel/time-confighub"
 where = ["src"]
 
 [tool.setuptools.package-data]
-time_config_hub = ["templates/*.service"]
+time_config_hub = ["infra/linux/templates/*.service"]
 
 [tool.pytest.ini_options]
 pythonpath = [

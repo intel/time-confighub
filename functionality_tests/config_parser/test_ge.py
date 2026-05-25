@@ -25,7 +25,7 @@ from config_parser.tsn.tc_command import (
     show_qdisc,
     show_tc_egress_filters,
 )
-from config_parser.common.universal_parser import UniversalParser
+from time_config_hub.utils.yang_parser.universal_parser import UniversalParser
 
 if __name__ == "__main__":
     file_path = "./I226-1-ES-IDEAL_config_demo_4.xml"

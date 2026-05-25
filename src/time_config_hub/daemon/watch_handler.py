@@ -8,7 +8,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from .time_hub_service import TimeHubService
+from ..orchestrator.time_hub_service import TimeHubService
 
 logger = logging.getLogger(__name__)
 
