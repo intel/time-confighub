@@ -20,10 +20,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from .config_parser_service import ConfigParserService
-from .exceptions import ConfigParseError, TCCConfigError
-from .service_interfaces import TCCServiceInterface
-from .tcc_state_store import TCCStateStore
+from time_config_hub.domain.common.config_parser_service import ConfigParserService
+from time_config_hub.exceptions import ConfigParseError, TCCConfigError
+from time_config_hub.orchestrator.service_interfaces import TCCServiceInterface
+from time_config_hub.domain.tcc.tcc_state_store import TCCStateStore
 
 
 logger = logging.getLogger(__name__)
