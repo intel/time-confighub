@@ -22,9 +22,9 @@ __license__ = "BSD"
 
 from .config.config_reader import ConfigReader
 from .orchestrator.time_hub_service import TimeHubService
-from .domain.common.service_interfaces import TCCServiceInterface, TSNServiceInterface
-from .domain.tcc.service import TCCService
-from .domain.tsn.service import TSNService
+from .services.common.service_interfaces import TCCServiceInterface, TSNServiceInterface
+from .services.tcc.service import TCCService
+from .services.tsn.service import TSNService
 
 __all__ = [
     "ConfigReader",

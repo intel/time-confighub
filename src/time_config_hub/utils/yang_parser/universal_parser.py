@@ -16,7 +16,7 @@ import defusedxml.ElementTree as SafeET
 import libyang
 
 from time_config_hub.utils.yang_parser.exceptions import InvalidInputDataError, UniversalParserError
-from time_config_hub.domain.tsn.dictionary import GE_Dictionary 
+from time_config_hub.services.tsn.dictionary import GE_Dictionary 
 from time_config_hub.resources.yang_modules import DEFAULT_YANG_DIR, load_yang_module
 
 def _collect_json_prefixes(node: Any, keywords: List[str]) -> Set[str]:
