@@ -25,9 +25,9 @@ from time_config_hub.infra.linux.tc_command import (
     show_tc_egress_filters,
 )
 
-from time_config_hub.domain.common.config_parser import ConfigParserService
+from time_config_hub.services.common.config_parser import ConfigParserService
 from time_config_hub.exceptions import ConfigParseError, TSNConfigError
-from time_config_hub.domain.common.service_interfaces import TSNServiceInterface
+from time_config_hub.services.common.service_interfaces import TSNServiceInterface
 
 logger = logging.getLogger(__name__)
 

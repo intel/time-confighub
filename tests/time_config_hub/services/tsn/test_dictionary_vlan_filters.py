@@ -3,7 +3,7 @@
 
 import pytest
 
-from time_config_hub.domain.tsn.dictionary import GE_Dictionary
+from time_config_hub.services.tsn.dictionary import GE_Dictionary
 
 @pytest.fixture
 def sample_all_talker_info():
