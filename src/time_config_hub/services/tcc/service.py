@@ -24,6 +24,7 @@ from time_config_hub.services.common.config_parser import ConfigParserService
 from time_config_hub.exceptions import ConfigParseError, TCCConfigError
 from time_config_hub.services.common.service_interfaces import TCCServiceInterface
 from time_config_hub.services.tcc.state_store import TCCStateStore
+from time_config_hub.services.tcc.api import TCCDataAPI
 
 
 logger = logging.getLogger(__name__)
@@ -40,14 +41,42 @@ class TCCService(TCCServiceInterface):
         self._state_store = TCCStateStore(self.config_dir)
 
     def apply(self, config_file: str, dry_run: bool = False) -> None:
+        """
+        Apply TCC configuration from the specified file.
+
+        :param config_file: Path to the TCC configuration file
+        :param dry_run: If True, validate the configuration without applying it
+        :raises TCCConfigError: If there is an error in applying the configuration
+        """
         try:
             logger.info(f"Applying TCC configuration from {config_file}")
-            self._parser.parse_config(config_file)
+            
+            # Parse configuration file
+            uparser = self._parser.parse_config(config_file)
+            raw_docs = uparser.documents
+            
+            # Log raw parsed documents for debugging
+            logger.debug(f"Parsed configuration documents: {raw_docs}")
+
+            # Translate raw documents to TCC specific data model
+            tcc_api = TCCDataAPI(uparser.documents)
+            
+            # Log profile information
+            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info(f"{tcc_api.summary()}")
+            logger.info(f"=============================================================")
+            
+            # Validate configuration consistency
+            validation_issues = tcc_api.validate_consistency()
+            if validation_issues:
+                for issue in validation_issues:
+                    logger.warning(f"Configuration validation: {issue}")
 
             if dry_run:
-                logger.info("Dry-run enabled; TCC configuration was validated only.")
+                logger.info("Dry-run enabled. TCC configuration was validated only.")
                 return
 
+            # Apply configuration (store state)
             self._state_store.save_applied_config(config_file)
             logger.info(f"TCC configuration applied successfully: {config_file}")
 
@@ -67,14 +96,36 @@ class TCCService(TCCServiceInterface):
 
     def validate(self, config_file: str) -> bool:
         try:
-            self._parser.parse_config(config_file)
+            logger.info(f"Validating TCC configuration file: {config_file}")
+
+            # Parse configuration file
+            uparser = self._parser.parse_config(config_file)
+            raw_docs = uparser.documents
+            
+            # Log raw parsed documents for debugging
+            logger.debug(f"Parsed configuration documents: {raw_docs}")
+
+            # Translate raw documents to TCC specific data model
+            tcc_api = TCCDataAPI(uparser.documents)
+            
+            # Log profile information
+            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info(f"{tcc_api.summary()}")
+            logger.info(f"=============================================================")
+            
+            # Validate configuration consistency
+            validation_issues = tcc_api.validate_consistency()
+            if validation_issues:
+                for issue in validation_issues:
+                    logger.warning(f"Configuration validation: {issue}")
+
             logger.info(f"TCC configuration file {config_file} is valid.")
             return True
+        
         except ConfigParseError as exc:
             logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
             return False
+        
         except Exception:
-            logger.exception(
-                f"Unexpected error validating TCC configuration: {config_file}"
-            )
+            logger.exception(f"Unexpected error validating TCC configuration: {config_file}")
             return False
