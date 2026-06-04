@@ -165,8 +165,8 @@ install_python_package() {
     "${VENV_DIR}/bin/python" -m pip install --upgrade dist/*.whl
 
     # Copy YANG modules to /etc/tch for runtime lookup
-    cp -r src/time_config_hub/resources/yang_modules/standards/* "${DEFAULT_YANG_DIR}/"
-    cp -r src/time_config_hub/resources/yang_modules/vendor/intel/* "${DEFAULT_YANG_DIR}/"
+    cp -r src/time_config_hub/resources/yang_modules/standards "${DEFAULT_YANG_DIR}/"
+    cp -r src/time_config_hub/resources/yang_modules/vendor "${DEFAULT_YANG_DIR}/"
 
     # Expose a stable CLI path for users
     mkdir -p "$(dirname "${TCH_SYMLINK_PATH}")"
