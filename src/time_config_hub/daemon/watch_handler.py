@@ -7,8 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
-
-from ..orchestrator.time_hub_service import TimeHubService
+from time_config_hub.orchestrator.time_hub_service import TimeHubService
 
 logger = logging.getLogger(__name__)
 
