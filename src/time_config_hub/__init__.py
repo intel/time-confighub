@@ -18,7 +18,7 @@ This package provides:
 
 __version__ = "1.0.0"
 __author__ = "Intel"
-__license__ = "BSD"
+__license__ = "BSD-3-Clause"
 
 from .config.config_reader import ConfigReader
 from .orchestrator.time_hub_service import TimeHubService
