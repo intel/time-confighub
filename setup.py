@@ -74,12 +74,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "tch=time_config_hub.cli:main",
+            "tch=time_config_hub.cli.root:main",
         ],
     },
     include_package_data=True,
     package_data={
-        "time_config_hub": ["templates/tch.service"],
+        "time_config_hub": ["infra/linux/templates/tch.service"],
     },
     zip_safe=False,
 )

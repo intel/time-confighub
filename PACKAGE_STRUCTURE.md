@@ -11,7 +11,8 @@ This document provides technical information for developers and maintainers of t
 time-confighub/          # Time Config Hub (Python package)
     ├── setup.py                # Package setup configuration
     ├── install.sh              # Installation script
-    ├── requirements.txt         # Production dependencies
+    ├── pyproject.toml          # Project metadata and dependencies
+    ├── black_config.toml       # Black formatter configuration
     ├── LICENSE                  # BSD License
     ├── MANIFEST.in              # Package manifest for distribution
     ├── .gitignore              # Git ignore rules
@@ -20,13 +21,19 @@ time-confighub/          # Time Config Hub (Python package)
     ├── src/
     |   └── time_config_hub/     # Main Python package
     |       ├── __init__.py         # Package initialization
-    |       ├── cli.py              # Command-line interface
-    |       ├── core.py             # Core functionality
-    |       ├── config_parser.py    # Configuration parsing
-    |       ├── tc_manager.py       # Traffic control management
+    |       ├── cli/                # CLI commands and exit codes
+    |       ├── config/             # App config and logging setup
+    |       ├── daemon/             # Filesystem watch and runtime daemon
+    |       ├── infra/              # Linux/device command adapters
+    |       ├── orchestrator/       # Service orchestration layer
+    |       ├── services/           # TSN/TCC domain services
+    |       ├── resources/          # YANG modules and resources
+    |       ├── templates/          # Internal templates
+    |       ├── utils/              # Shared utilities
     |       └── exceptions.py       # Custom exceptions
     ├── tests/
-    └── pyproject.toml
+    ├── functionality_tests/
+    └── docs/
 
 ```
 
@@ -59,7 +66,7 @@ pytest tests/
 pytest --cov=time_config_hub tests/
 
 # Run specific test files
-pytest tests/test_config_parser.py
+pytest tests/time_config_hub/
 
 # Generate HTML coverage report
 pytest --cov=time_config_hub --cov-report=html tests/
@@ -68,11 +75,11 @@ pytest --cov=time_config_hub --cov-report=html tests/
 ### Code Quality
 
 ```bash
-# Format code with black
-cd src && black time_config_hub/
+# Lint with Ruff
+ruff check .
 
-# Check code style and quality
-pylint time_config_hub/
+# Format code with Black
+black --config black_config.toml .
 ```
 
 ## Package Distribution
@@ -102,7 +109,7 @@ The `tch` command is defined in `setup.py` as a console script entry point:
 ```python
 entry_points={
     'console_scripts': [
-        'tch=time_config_hub.cli:main',
+        'tch=time_config_hub.cli.root:main',
     ],
 }
 ```
@@ -110,10 +117,10 @@ entry_points={
 ### Command Structure
 
 Available commands:
-- `tch apply` - Apply TSN configuration
-- `tch status` - Get interface status
-- `tch validate` - Validate configuration files
-- `tch watch` - Monitor directory for changes
+- `tch tsn apply|status|reset|validate` - Manage TSN configurations
+- `tch tcc apply|status|reset|validate` - Manage TCC configurations
+- `tch daemon-status|daemon-start|daemon-stop|daemon-restart` - Manage daemon service
+- `tch config-show` - Show active application configuration
 
 ## Publishing and Release
 
@@ -151,10 +158,11 @@ Version information should be maintained in:
 
 ### Core Components
 
-- **cli.py** - Click-based command-line interface implementation
-- **core.py** - Main Time Config Hub class and business logic
-- **config_parser.py** - XML/YAML configuration file parsing
-- **tc_manager.py** - Linux Traffic Control command generation and execution
+- **cli/root.py** - Click-based CLI entry point and command groups
+- **orchestrator/time_hub_service.py** - Main orchestration service for TSN/TCC operations
+- **services/tsn/service.py** - TSN domain service logic
+- **services/tcc/service.py** - TCC domain service logic
+- **infra/linux/** - Linux command wrappers and service management
 - **exceptions.py** - Custom exception classes for error handling
 
 ### Configuration Management
@@ -174,7 +182,7 @@ The package uses a layered configuration approach:
 3. Install development dependencies: `pip install -e .[dev]`
 4. Make changes and add tests
 5. Run test suite: `pytest tests/`
-6. Check code quality: `cd src && black . && pylint time_config_hub/`
+6. Check code quality: `ruff check . && black --config black_config.toml .`
 7. Commit and push changes
 8. Create a pull request
 
@@ -182,6 +190,7 @@ The package uses a layered configuration approach:
 
 - Follow PEP 8 style guidelines
 - Use black for consistent formatting
+- Use ruff for linting
 - Add type hints where appropriate
 - Include docstrings for public functions and classes
 - Write tests for new functionality

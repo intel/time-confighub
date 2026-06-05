@@ -15,8 +15,8 @@ The module is designed to work with Linux systems.
 import logging
 import re
 
-from ..commands.base_command import BaseCommand
-from ..commands.ethtool_command import EthtoolCommand
+from time_config_hub.infra.command_runner import BaseCommand
+from time_config_hub.infra.linux.ethtool_command import EthtoolCommand
 
 logger = logging.getLogger(__name__)
 

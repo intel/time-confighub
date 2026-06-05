@@ -110,19 +110,19 @@ The `tch` command provides the main interface:
 tch --version
 
 # Apply configuration (dry run to validate)
-tch apply config.json --interface eth0 --dry-run
+tch tsn apply config.json --interface eth0 --dry-run
 
 # Apply configuration (requires root privileges)
-sudo tch apply config.json --interface eth0
+sudo tch tsn apply config.json --interface eth0
 
 # Get current config status
-tch status --interface eth0 --format json
+tch tsn status --interface eth0 --format json
 
 # Reset TSN configuration
-sudo tch reset --interface eth0
+sudo tch tsn reset --interface eth0
 
 # Validate configuration file
-tch validate config.json  # Note: Not yet implemented
+tch tsn validate config.json  # Note: Not yet implemented
 ```
 
 #### Daemon Commands
@@ -141,14 +141,18 @@ sudo tch daemon-restart
 
 | Command | Description |
 |---------|-------------|
-| `apply <config_file>` | Apply TSN configuration from XML/JSON file |
-| `status [--interface]` | Show current config status |
-| `reset [--interface]` | Reset TSN configuration |
+| `tsn apply <config_file>` | Apply TSN configuration from XML/YAML file |
+| `tsn status <interface>` | Show TSN status for an interface |
+| `tsn reset <interface>` | Reset TSN configuration for an interface |
+| `tsn validate <config_file>` | Validate TSN configuration file |
+| `tcc apply <config_file>` | Apply TCC configuration from XML/YAML file |
+| `tcc status` | Show TCC configuration status |
+| `tcc reset` | Reset TCC configuration |
+| `tcc validate <config_file>` | Validate TCC configuration file |
 | `daemon-status` | Show daemon status information |
 | `daemon-start` | Start systemd daemon service |
 | `daemon-stop` | Stop systemd daemon service |
 | `daemon-restart` | Restart systemd daemon service |
-| `validate <config_file>` | Validate configuration file format *(not yet implemented)* |
 | `config-show` | Show current CLI configuration |
 
 ### Configuration Files
@@ -177,10 +181,12 @@ Queue mapping is determined by VLAN priority (PCP):
 ### Programmatic API
 
 ```python
-from time_config_hub import TIMEConfigHub
+from time_config_hub.config.config_reader import load_app_config
+from time_config_hub.orchestrator.time_hub_service import TimeHubService
 
 # Initialize hub
-config_hub = TIMEConfigHub()
+app_config = load_app_config()
+config_hub = TimeHubService(app_config)
 
 # Apply configuration
 success = config_hub.apply_config("config.xml", interface="eth0")
@@ -236,15 +242,15 @@ For technical and development information:
 - If `/usr/local/bin` is not in `PATH`, add it or invoke `/opt/tch/venv/bin/tch` directly
 
 **Permission denied when applying configurations**
-- TSN configuration requires root privileges: `sudo tch apply ...`
+- TSN/TCC configuration commands require root privileges: `sudo tch tsn apply ...` or `sudo tch tcc apply ...`
 
 **Interface not found error**
 - Verify the network interface exists: `ip link show`
-- Ensure the interface supports TSN features: `tch status --interface <interface>`
+- Ensure the interface supports TSN features: `tch tsn status --interface <interface>`
 
 **Configuration parsing errors**
-- Validate your XML/JSON files: `tch validate config.xml`
-- Use dry-run mode before applying: `tch apply config.xml --dry-run`
+- Validate your XML/JSON files: `tch tsn validate config.xml` or `tch tcc validate config.xml`
+- Use dry-run mode before applying: `tch tsn apply config.xml --dry-run`
 - Check the configuration format matches the expected schema
 
 **Daemon not responding**
