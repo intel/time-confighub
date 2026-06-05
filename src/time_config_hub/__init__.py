@@ -20,11 +20,11 @@ __version__ = "1.0.0"
 __author__ = "Intel"
 __license__ = "BSD"
 
-from .config_reader import ConfigReader
-from .time_hub_service import TimeHubService
-from .service_interfaces import TCCServiceInterface, TSNServiceInterface
-from .tcc_service import TCCService
-from .tsn_service import TSNService
+from .config.config_reader import ConfigReader
+from .orchestrator.time_hub_service import TimeHubService
+from .services.common.service_interfaces import TCCServiceInterface, TSNServiceInterface
+from .services.tcc.service import TCCService
+from .services.tsn.service import TSNService
 
 __all__ = [
     "ConfigReader",
