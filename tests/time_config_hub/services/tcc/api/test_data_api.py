@@ -1,13 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Unit tests for TCCDataAPI (services/tcc/api/data_api.py)."""
+"""Unit tests for TCCConfigDataAPI (services/tcc/api/data_api.py)."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from time_config_hub.services.tcc.api.data_api import TCCDataAPI
+from time_config_hub.services.tcc.api.data_api import TCCConfigDataAPI
 from time_config_hub.services.tcc.schemas.tcc_data_types import (
     CpuAssignment,
     CpuFrequency,
@@ -115,14 +115,14 @@ def full_profile() -> TccConfigProfile:
     )
 
 
-def _make_api(profile: TccConfigProfile, mock_documents: list[dict]) -> TCCDataAPI:
-    """Instantiate TCCDataAPI with the mapper patched to return *profile*."""
+def _make_api(profile: TccConfigProfile, mock_documents: list[dict]) -> TCCConfigDataAPI:
+    """Instantiate TCCConfigDataAPI with the mapper patched to return *profile*."""
     with patch(
         "time_config_hub.services.tcc.api.data_api.TCCRawToDataModelMapping"
         ".documents_to_tcc_data_model",
         return_value=profile,
     ):
-        return TCCDataAPI(mock_documents)
+        return TCCConfigDataAPI(mock_documents)
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +130,8 @@ def _make_api(profile: TccConfigProfile, mock_documents: list[dict]) -> TCCDataA
 # ---------------------------------------------------------------------------
 
 
-class TestTCCDataAPIInit:
-    """Tests for TCCDataAPI.__init__ and property delegation."""
+class TestTCCConfigDataAPIInit:
+    """Tests for TCCConfigDataAPI.__init__ and property delegation."""
 
     def test_init_calls_mapper(self, mock_documents):
         profile = _make_tcc_profile()
@@ -140,7 +140,7 @@ class TestTCCDataAPIInit:
             ".documents_to_tcc_data_model",
             return_value=profile,
         ) as mock_mapper:
-            TCCDataAPI(mock_documents)
+            TCCConfigDataAPI(mock_documents)
             mock_mapper.assert_called_once_with(mock_documents)
 
     def test_profile_id_property(self, mock_documents):
@@ -160,82 +160,82 @@ class TestTCCDataAPIInit:
 
 
 # ---------------------------------------------------------------------------
-# get_available_subsystem_containers
+# list_of_subsystem_configured
 # ---------------------------------------------------------------------------
 
 
-class TestGetAvailableSubsystemContainers:
+class TestListOfSubsystemsConfigured:
     def test_empty_when_no_subsections(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_available_subsystem_containers() == set()
+        assert api.list_of_subsystem_configured() == set()
 
-    def test_cpu_scheduling_container(self, mock_documents):
+    def test_cpu_scheduling_subsystem(self, mock_documents):
         profile = _make_tcc_profile(
             cpu_scheduling=CpuSchedulingPlan(),
         )
         api = _make_api(profile, mock_documents)
-        assert "cpu-scheduling" in api.get_available_subsystem_containers()
+        assert "cpu-scheduling" in api.list_of_subsystem_configured()
 
-    def test_cpu_frequency_container(self, mock_documents):
+    def test_cpu_frequency_subsystem(self, mock_documents):
         profile = _make_tcc_profile(cpu_frequency=CpuFrequency())
         api = _make_api(profile, mock_documents)
-        assert "cpu-frequency" in api.get_available_subsystem_containers()
+        assert "cpu-frequency" in api.list_of_subsystem_configured()
 
-    def test_returns_only_present_containers(self, mock_documents, full_profile):
+    def test_returns_only_present_subsystems(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        containers = api.get_available_subsystem_containers()
-        assert containers == {"cpu-scheduling", "cpu-frequency"}
+        subsystems = api.list_of_subsystem_configured()
+        assert subsystems == {"cpu-scheduling", "cpu-frequency"}
 
-    def test_uncore_and_qos_containers(self, mock_documents):
+    def test_uncore_and_qos_subsystems(self, mock_documents):
         profile = TccConfigProfile(
             profile_id="p",
             uncore_frequency=MagicMock(),
             platform_qos_resource_config=MagicMock(),
         )
         api = _make_api(profile, mock_documents)
-        containers = api.get_available_subsystem_containers()
-        assert "uncore-frequency" in containers
-        assert "platform-qos-resource-config" in containers
+        subsystems = api.list_of_subsystem_configured()
+        assert "uncore-frequency" in subsystems
+        assert "platform-qos-resource-config" in subsystems
 
 
 # ---------------------------------------------------------------------------
-# get_cpu_scheduling
+# cpu_scheduling
 # ---------------------------------------------------------------------------
 
 
-class TestGetCpuScheduling:
+class TestCpuScheduling:
     def test_returns_none_when_absent(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_cpu_scheduling() is None
+        assert api.cpu_scheduling() is None
 
     def test_returns_scheduling_plan(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        result = api.get_cpu_scheduling()
+        result = api.cpu_scheduling()
         assert result is not None
         assert isinstance(result, CpuSchedulingPlan)
 
 
 # ---------------------------------------------------------------------------
-# get_isolated_cpus / get_non_isolated_cpus
+# isolated_cpus / non_isolated_cpus
 # ---------------------------------------------------------------------------
 
 
 class TestIsolatedCpus:
     def test_empty_when_no_scheduling(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_isolated_cpus() == []
+        assert api.isolated_cpus() == []
 
     def test_isolated_cpus(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert sorted(api.get_isolated_cpus()) == [1, 2]
+        assert sorted(api.isolated_cpus()) == [1, 2]
 
     def test_non_isolated_cpus(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert sorted(api.get_non_isolated_cpus()) == [0, 3]
+        assert sorted(api.non_isolated_cpus()) == [0, 3]
 
     def test_empty_when_no_scheduling_non_isolated(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_non_isolated_cpus() == []
+        assert api.non_isolated_cpus() == []
 
     def test_all_isolated(self, mock_documents):
         scheduling = CpuSchedulingPlan(
@@ -246,102 +246,102 @@ class TestIsolatedCpus:
         )
         profile = _make_tcc_profile(cpu_scheduling=scheduling)
         api = _make_api(profile, mock_documents)
-        assert sorted(api.get_isolated_cpus()) == [0, 1]
-        assert api.get_non_isolated_cpus() == []
+        assert sorted(api.isolated_cpus()) == [0, 1]
+        assert api.non_isolated_cpus() == []
 
 
 # ---------------------------------------------------------------------------
-# get_cpu_frequency_profiles / get_frequency_profile / get_all_frequency_profiles
+# cpu_frequency_profiles / frequency_profile / all_frequency_profiles
 # ---------------------------------------------------------------------------
 
 
 class TestFrequencyProfiles:
     def test_returns_none_when_no_frequency(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_cpu_frequency_profiles() is None
+        assert api.cpu_frequency_profiles() is None
 
     def test_returns_cpu_frequency_object(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        result = api.get_cpu_frequency_profiles()
+        result = api.cpu_frequency_profiles()
         assert isinstance(result, CpuFrequency)
 
-    def test_get_all_frequency_profiles_empty_when_no_section(self, mock_documents, minimal_profile):
+    def test_all_frequency_profiles_empty_when_no_section(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_all_frequency_profiles() == {}
+        assert api.all_frequency_profiles() == {}
 
-    def test_get_all_frequency_profiles(self, mock_documents, full_profile):
+    def test_all_frequency_profiles(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        profiles = api.get_all_frequency_profiles()
+        profiles = api.all_frequency_profiles()
         assert set(profiles.keys()) == {"rt", "be"}
 
-    def test_get_frequency_profile_found(self, mock_documents, full_profile):
+    def test_frequency_profile_found(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        profile = api.get_frequency_profile("rt")
+        profile = api.frequency_profile("rt")
         assert profile is not None
         assert profile.profile_id == "rt"
         assert profile.frequency_config.governor == "performance"
 
-    def test_get_frequency_profile_not_found(self, mock_documents, full_profile):
+    def test_frequency_profile_not_found(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert api.get_frequency_profile("nonexistent") is None
+        assert api.frequency_profile("nonexistent") is None
 
-    def test_get_frequency_profile_when_no_frequency_section(self, mock_documents, minimal_profile):
+    def test_frequency_profile_when_no_frequency_section(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_frequency_profile("any") is None
+        assert api.frequency_profile("any") is None
 
 
 # ---------------------------------------------------------------------------
-# get_cpu_frequency_assignment / get_frequency_profile_for_cpu
+# cpu_frequency_assignment / frequency_profile_for_cpu
 # ---------------------------------------------------------------------------
 
 
 class TestCpuFrequencyAssignment:
     def test_returns_none_when_no_frequency_section(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_cpu_frequency_assignment(0) is None
+        assert api.cpu_frequency_assignment(0) is None
 
     def test_returns_profile_ref_for_assigned_cpu(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert api.get_cpu_frequency_assignment(1) == "rt"
-        assert api.get_cpu_frequency_assignment(0) == "be"
+        assert api.cpu_frequency_assignment(1) == "rt"
+        assert api.cpu_frequency_assignment(0) == "be"
 
     def test_returns_none_for_unassigned_cpu(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert api.get_cpu_frequency_assignment(99) is None
+        assert api.cpu_frequency_assignment(99) is None
 
-    def test_get_frequency_profile_for_cpu_returns_correct_profile(self, mock_documents, full_profile):
+    def test_frequency_profile_for_cpu_returns_correct_profile(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        profile = api.get_frequency_profile_for_cpu(2)
+        profile = api.frequency_profile_for_cpu(2)
         assert profile is not None
         assert profile.profile_id == "rt"
 
-    def test_get_frequency_profile_for_cpu_unassigned(self, mock_documents, full_profile):
+    def test_frequency_profile_for_cpu_unassigned(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert api.get_frequency_profile_for_cpu(99) is None
+        assert api.frequency_profile_for_cpu(99) is None
 
-    def test_get_frequency_profile_for_cpu_no_frequency_section(self, mock_documents, minimal_profile):
+    def test_frequency_profile_for_cpu_no_frequency_section(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_frequency_profile_for_cpu(0) is None
+        assert api.frequency_profile_for_cpu(0) is None
 
 
 # ---------------------------------------------------------------------------
-# get_cpus_for_frequency_profile
+# cpus_for_frequency_profile
 # ---------------------------------------------------------------------------
 
 
-class TestGetCpusForFrequencyProfile:
+class TestCpusForFrequencyProfile:
     def test_empty_when_no_frequency_section(self, mock_documents, minimal_profile):
         api = _make_api(minimal_profile, mock_documents)
-        assert api.get_cpus_for_frequency_profile("rt") == []
+        assert api.cpus_for_frequency_profile("rt") == []
 
     def test_returns_correct_cpus(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert sorted(api.get_cpus_for_frequency_profile("rt")) == [1, 2]
-        assert sorted(api.get_cpus_for_frequency_profile("be")) == [0, 3]
+        assert sorted(api.cpus_for_frequency_profile("rt")) == [1, 2]
+        assert sorted(api.cpus_for_frequency_profile("be")) == [0, 3]
 
     def test_returns_empty_for_unknown_profile(self, mock_documents, full_profile):
         api = _make_api(full_profile, mock_documents)
-        assert api.get_cpus_for_frequency_profile("ghost") == []
+        assert api.cpus_for_frequency_profile("ghost") == []
 
 
 # ---------------------------------------------------------------------------

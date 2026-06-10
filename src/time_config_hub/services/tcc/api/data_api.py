@@ -18,7 +18,7 @@ from time_config_hub.services.tcc.schemas.tcc_data_types import (
 )
 
 
-class TCCDataAPI:
+class TCCConfigDataAPI:
     """
     High-level data access API for TCC configuration.
 
@@ -48,30 +48,30 @@ class TCCDataAPI:
         """Get the TCC profile description."""
         return self.mapped_data.profile_description
 
-    def get_available_subsystem_containers(self) -> Set[str]:
+    def list_of_subsystem_configured(self) -> Set[str]:
         """
-        Get set of available TCC subsystem containers in the profile.
+        Get set of available TCC subsystem configured in the profile.
 
-        :return: Set of container names
+        :return: Set of subsystem names
         :rtype: Set[str]
         """
-        containers = set()
+        configured_subsystems = set()
 
         if self.mapped_data.cpu_scheduling:
-            containers.add("cpu-scheduling")
+            configured_subsystems.add("cpu-scheduling")
 
         if self.mapped_data.cpu_frequency:
-            containers.add("cpu-frequency")
+            configured_subsystems.add("cpu-frequency")
 
         if self.mapped_data.uncore_frequency:
-            containers.add("uncore-frequency")
+            configured_subsystems.add("uncore-frequency")
 
         if self.mapped_data.platform_qos_resource_config:
-            containers.add("platform-qos-resource-config")
+            configured_subsystems.add("platform-qos-resource-config")
 
-        return containers
+        return configured_subsystems
 
-    def get_cpu_scheduling(self) -> Optional[CpuSchedulingPlan]:
+    def cpu_scheduling(self) -> Optional[CpuSchedulingPlan]:
         """
         Get CPU scheduling configuration.
 
@@ -80,7 +80,7 @@ class TCCDataAPI:
         """
         return self.mapped_data.cpu_scheduling
 
-    def get_isolated_cpus(self) -> List[int]:
+    def isolated_cpus(self) -> List[int]:
         """
         Get list of CPU IDs marked as isolated.
 
@@ -96,7 +96,7 @@ class TCCDataAPI:
                 isolated.append(assignment.cpu_id)
         return isolated
 
-    def get_non_isolated_cpus(self) -> List[int]:
+    def non_isolated_cpus(self) -> List[int]:
         """
         Get list of CPU IDs NOT marked as isolated (housekeeping).
 
@@ -112,7 +112,7 @@ class TCCDataAPI:
                 non_isolated.append(assignment.cpu_id)
         return non_isolated
 
-    def get_cpu_frequency_profiles(self) -> Optional[CpuFrequency]:
+    def cpu_frequency_profiles(self) -> Optional[CpuFrequency]:
         """
         Get CPU frequency profile configuration.
 
@@ -121,7 +121,7 @@ class TCCDataAPI:
         """
         return self.mapped_data.cpu_frequency
 
-    def get_frequency_profile(self, profile_id: str) -> Optional[FrequencyProfile]:
+    def frequency_profile(self, profile_id: str) -> Optional[FrequencyProfile]:
         """
         Get a specific frequency profile by ID.
 
@@ -133,7 +133,7 @@ class TCCDataAPI:
             return None
         return self.mapped_data.cpu_frequency.frequency_profiles.get(profile_id)
 
-    def get_all_frequency_profiles(self) -> Dict[str, FrequencyProfile]:
+    def all_frequency_profiles(self) -> Dict[str, FrequencyProfile]:
         """
         Get all defined frequency profiles.
 
@@ -144,7 +144,7 @@ class TCCDataAPI:
             return {}
         return self.mapped_data.cpu_frequency.frequency_profiles
 
-    def get_cpu_frequency_assignment(self, cpu_id: int) -> Optional[str]:
+    def cpu_frequency_assignment(self, cpu_id: int) -> Optional[str]:
         """
         Get frequency profile assigned to a specific CPU.
 
@@ -159,7 +159,7 @@ class TCCDataAPI:
                 return assignment.profile_ref
         return None
 
-    def get_frequency_profile_for_cpu(self, cpu_id: int) -> Optional[FrequencyProfile]:
+    def frequency_profile_for_cpu(self, cpu_id: int) -> Optional[FrequencyProfile]:
         """
         Get the frequency profile configuration for a specific CPU.
 
@@ -169,12 +169,12 @@ class TCCDataAPI:
         """
         if not self.mapped_data.cpu_frequency:
             return None
-        profile_id = self.get_cpu_frequency_assignment(cpu_id)
+        profile_id = self.cpu_frequency_assignment(cpu_id)
         if not profile_id:
             return None
         return self.mapped_data.cpu_frequency.frequency_profiles.get(profile_id)
 
-    def get_cpus_for_frequency_profile(self, profile_id: str) -> List[int]:
+    def cpus_for_frequency_profile(self, profile_id: str) -> List[int]:
         """
         Get all CPUs assigned to a specific frequency profile.
 
@@ -247,18 +247,18 @@ class TCCDataAPI:
         lines = [
             f"TCC Profile: {self.mapped_data.profile_id}",
             f"Description: {self.mapped_data.profile_description or '(none)'}",
-            f"Selected TCC Subsystems: {sorted(self.get_available_subsystem_containers())}",
+            f"Selected TCC Subsystems: {sorted(self.list_of_subsystem_configured())}",
         ]
 
-        isolated = self.get_isolated_cpus()
+        isolated = self.isolated_cpus()
         if isolated:
             lines.append(f"Isolated CPUs: {isolated}")
 
-        freq_profiles = self.get_all_frequency_profiles()
+        freq_profiles = self.all_frequency_profiles()
         if freq_profiles:
             lines.append(f"Frequency Profiles: {list(freq_profiles.keys())}")
             for profile_id, profile in freq_profiles.items():
-                cpus = self.get_cpus_for_frequency_profile(profile_id)
+                cpus = self.cpus_for_frequency_profile(profile_id)
                 lines.append(
                     f"  {profile_id}: {profile.frequency_config.governor} "
                     f"({profile.frequency_config.min_freq_mhz}-{profile.frequency_config.max_freq_mhz} MHz), CPUs: {cpus}"
