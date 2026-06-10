@@ -17,7 +17,6 @@ It supports:
 - Mapping uncore frequency and platform QoS resource settings
 
 """
-
 from typing import Any, Optional, cast
 
 import time_config_hub.services.tcc.schemas.tcc_data_types as tcc_types
@@ -41,16 +40,23 @@ class TCCRawToDataModelMapping:
         :return: TccConfigProfile instance
         :rtype: TccConfigProfile
         :raises InvalidInputDataError: If required profile-id is missing
+        :raises InvalidInputDataError: If more than one tcc-config root element is present
         """
         if not documents:
             raise InvalidInputDataError("No documents provided for TCC profile mapping")
+        
+        if len(documents) > 1:
+            raise InvalidInputDataError(
+                f"Only a single tcc-config instance is permitted per XML file, "
+                f"but {len(documents)} were found. "
+                "Remove the duplicate tcc-config root element(s) and resubmit."
+            )
 
         roots = [TCCRawToDataModelMapping._resolve_profile_root(doc) for doc in documents]
         if not roots:
             raise InvalidInputDataError("No valid document dictionaries provided for TCC profile mapping")
 
         doc = roots[0]
-
         profile_id = TCCRawToDataModelMapping._extract_string(doc, "profile-id")
         if not profile_id:
             for candidate in roots[1:]:
