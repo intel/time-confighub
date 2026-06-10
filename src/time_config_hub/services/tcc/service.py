@@ -24,7 +24,7 @@ from time_config_hub.services.common.config_parser import ConfigParserService
 from time_config_hub.exceptions import ConfigParseError, TCCConfigError
 from time_config_hub.services.common.service_interfaces import TCCServiceInterface
 from time_config_hub.services.tcc.state_store import TCCStateStore
-from time_config_hub.services.tcc.api import TCCDataAPI
+from time_config_hub.services.tcc.api import TCCConfigDataAPI
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class TCCService(TCCServiceInterface):
             logger.debug(f"Parsed configuration documents: {raw_docs}")
 
             # Translate raw documents to TCC specific data model
-            tcc_api = TCCDataAPI(uparser.documents)
+            tcc_api = TCCConfigDataAPI(uparser.documents)
 
             # Log profile information
             logger.info(f"================= TCC Configuration Summary =================")
@@ -106,7 +106,7 @@ class TCCService(TCCServiceInterface):
             logger.debug(f"Parsed configuration documents: {raw_docs}")
 
             # Translate raw documents to TCC specific data model
-            tcc_api = TCCDataAPI(uparser.documents)
+            tcc_api = TCCConfigDataAPI(uparser.documents)
 
             # Log profile information
             logger.info(f"================= TCC Configuration Summary =================")
