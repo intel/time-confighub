@@ -144,16 +144,16 @@ class Ieee8021QCncConfigWrapper(BaseYangConfigWrapper):
         """Return formatted talker VLAN info for *stream_id*.
 
         :param str stream_id: The stream ID to look up.
-        :return: List of formatted strings, or a single "not found" message.
+        :return: List of formatted strings, or an empty list if not found.
         :rtype: List[str]
         """
-        if stream_id not in self.get_stream_ids():
-            return [f"Stream ID '{stream_id}' not found."]
+        all_info = self.get_talker_vlan_info()
+        if stream_id not in all_info:
+            return []
 
-        talkers = self.get_talker_vlan_info().get(stream_id, [])
         return [
             f"MAC: {t['mac']}, IF: {t['interface']}, VLAN: {t['vlan']}, PCP: {t['pcp']}"
-            for t in talkers
+            for t in all_info[stream_id]
         ]
 
     def get_all_time_aware_talker_vlan_info(self) -> Dict[str, List[Dict[str, Any]]]:

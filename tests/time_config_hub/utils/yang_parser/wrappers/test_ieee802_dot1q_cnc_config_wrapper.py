@@ -174,7 +174,7 @@ def test_get_talker_vlan_info_by_stream_type_c(wrapper: Ieee8021QCncConfigWrappe
 
 def test_get_talker_vlan_info_by_stream_not_found(wrapper: Ieee8021QCncConfigWrapper):
     result = wrapper.get_talker_vlan_info_by_stream("missing-stream-id")
-    assert result == ["Stream ID 'missing-stream-id' not found."]
+    assert len(result) == 0
 
 
 # ---------------------------------------------------------------------------
