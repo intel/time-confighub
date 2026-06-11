@@ -16,7 +16,7 @@ Usage::
     from time_config_hub.utils.yang_parser.wrappers import get_wrapper_for_namespace
 
     cls = get_wrapper_for_namespace("urn:ietf:params:xml:ns:yang:ietf-interfaces")
-    wrapper = cls(raw_config, parsed_dict)
+    wrapper = cls(raw_config)
 """
 
 import importlib
