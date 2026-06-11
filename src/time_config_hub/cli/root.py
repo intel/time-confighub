@@ -13,6 +13,7 @@ This module provides a comprehensive CLI for TCC and TSN configuration managemen
 - Resetting configurations to defaults
 - Managing the daemon service
 - Configuration validation and display
+- Orchestration services with multiple topology and test configuration options [HEAMINGS: FOR TESTING ONLY]
 
 The CLI supports both interactive and non-interactive usage patterns,
 with proper error handling and logging capabilities.
@@ -28,11 +29,20 @@ import click
 import yaml
 
 from .. import __version__
-from ..config.config_reader import load_app_config
+from time_config_hub.config.config_reader import load_app_config
 from time_config_hub.orchestrator.time_hub_service import TimeHubService
-from ..exceptions import TCCConfigError, TSNConfigError
+from time_config_hub.exceptions import TCCConfigError, TSNConfigError
 from time_config_hub.cli.exit_codes import TchExitCode
-from ..config.logging import setup_logging
+from time_config_hub.config.logging import setup_logging
+
+from time_config_hub.orchestrator.models import (
+        DeploymentTopologyType,
+        ORCHESTRATION_STAGES,
+        OrchestratorConfig,
+        Target,
+)
+
+from time_config_hub.orchestrator.ipc import send_orchestration_request
 
 logger = logging.getLogger(__name__)
 
@@ -754,6 +764,396 @@ def validate(ctx, config_file: str):
 
     finally:
         sys.exit(exit_code)
+
+
+#[HEAMINGS FOR TESTING ONLY] Orchestrator command implementation with topology and test configuration options, sending request to Orchestrator daemon via IPC
+#------------------------------------------------------------------------------
+# Orchestrator Command Implementation
+#   1) Accepts topology setup (either via config file or CLI flags), 
+#      test configuration, and orchestration configuration.
+#   2) Handles user input validation and error handling for the 
+#      orchestration request.
+#   3) Sends the orchestration request to the Orchestrator daemon via 
+#      the defined IPC mechanism (e.g. Unix socket).
+#   4) Provides feedback to the user on the status of their 
+#      orchestration request (e.g. accepted, validation errors, etc.)
+#------------------------------------------------------------------------------
+@cli.command()
+# --- Topology: Config file ---
+@click.option(
+    "--topology-setup-config",
+    type=click.Path(exists=True),
+    help="YAML file with talker/listener topology and SSH credentials",
+)
+# --- Topology: CLI flags (B2B with integrated Host) ---
+@click.option("--talker", default=None, help="Talker IP address")
+@click.option("--talker-user", default="root", show_default=True, help="Talker SSH user")
+@click.option("--talker-password", default="demo123", help="Talker SSH password")
+@click.option("--talker-port", default=22, type=int, show_default=True, help="Talker SSH port")
+@click.option("--listeners", multiple=True, help="Listener IP address(es), repeatable")
+@click.option("--listeners-user", default="root", show_default=True, help="Listeners SSH user")
+@click.option("--listeners-password", default="demo123", help="Listeners SSH password")
+@click.option("--listeners-port", default=22, type=int, show_default=True, help="Listeners SSH port")
+
+# --- Orchestrator: Test Configuration ---
+@click.option("--tcc-config", type=click.Path(exists=True), required=True, help="Path to TCC config XML file")
+@click.option("--tsn-config", type=click.Path(exists=True), required=True, help="Path to TSN config XML file")
+@click.option("--test-duration", type=int, default=None, help="Test duration in seconds")
+@click.option("--timeout", type=int, default=None, help="Max wait time before aborting (seconds)")
+@click.option(
+    "--orchestration-config",
+    type=click.Path(exists=True),
+    default=None,
+    help="YAML file describing workload, benchmark, and stage selections",
+)
+# --- Orchestrator: Option flags ---
+@click.option("--dry-run", is_flag=True, help="Show orchestration plan without executing")
+@click.option("--verbose", is_flag=True, help="Enable verbose logging")
+@click.option("--logfile", type=click.Path(), default=None, help="Path to orchestration log file")
+@click.pass_context
+def orchestrate(
+    ctx,
+    topology_setup_config,
+    talker, talker_user, talker_password, talker_port,
+    listeners, listeners_user, listeners_password, listeners_port,
+    tcc_config, tsn_config, test_duration, timeout,
+    orchestration_config,
+    dry_run, verbose, logfile,
+):
+    """
+    Run an orchestrated TIME deployment across one or more targets.
+
+    Topology can be specified via a YAML config file (--topology-setup-config)
+    or via CLI flags (--talker / --listeners) for simple B2B with integrated Host setup.
+
+    Examples:
+        # LOCAL: no topology flags (runs on this machine)
+        cmd> tch orchestrate --tcc-config tcc.xml --tsn-config tsn.xml
+
+        # B2B: Host on Talker, one Listener
+        cmd> tch orchestrate --tcc-config tcc.xml --tsn-config tsn.xml \\
+            --talker 192.168.1.10 --listeners 192.168.1.20
+
+        # B2B via config file
+        cmd> tch orchestrate --tcc-config tcc.xml --tsn-config tsn.xml \\
+            --topology-setup-config topology.yaml
+
+        # Dry run with orchestration config
+        cmd> tch orchestrate --tcc-config tcc.xml --tsn-config tsn.xml \\
+            --talker 192.168.1.10 --listeners 192.168.1.20 \\
+            --orchestration-config orch.yaml --dry-run
+
+    :param ctx: Click context object
+    :param Optional[str] topology_setup_config: Path to YAML file defining topology and SSH credentials
+    :param Optional[str] talker: Talker IP address (for CLI topology)
+    :param Optional[str] talker_user: Talker SSH username (for CLI topology)
+    :param Optional[str] talker_password: Talker SSH password (for CLI topology)
+    :param int talker_port: Talker SSH port (for CLI topology)
+    :param Optional[Tuple[str]] listeners: Listener IP addresses (for CLI topology)
+    :param Optional[str] listeners_user: Listeners SSH username (for CLI topology)
+    :param Optional[str] listeners_password: Listeners SSH password (for CLI topology)
+    :param int listeners_port: Listeners SSH port (for CLI topology)
+    :param str tcc_config: Path to TCC config XML file
+    :param str tsn_config: Path to TSN config XML file
+    :param Optional[int] test_duration: Expected test duration in seconds (for progress reporting)
+    :param Optional[int] timeout: Max wait time before aborting in seconds (for timeout handling)
+    :param Optional[str] orchestration_config: Path to YAML file defining workload, benchmark, and stage selections
+    :param bool dry_run: If true, show orchestration plan without executing
+    :param bool verbose: If true, enable verbose logging
+    :param Optional[str] logfile: If set, path to log file for orchestration logs
+    """
+
+    # Setup logging based on user flags
+    if verbose:
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.DEBUG)
+        for handler in root_logger.handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                handler.setLevel(logging.DEBUG)
+    if logfile:
+        log_fh = logging.FileHandler(logfile)
+        log_fh.setLevel(logging.DEBUG)
+        log_fh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logging.getLogger().addHandler(log_fh)
+
+    # Conflict Check: cannot use topology config file with CLI topology flags.
+    # Rationale: Assumption is dangerous that user will mix methods. 
+    #           For simplicity and to avoid confusion, only one method shall be used to define topology.
+    has_cli_topology = talker or listeners
+    if topology_setup_config and has_cli_topology:
+        click.echo(
+            "✗ Cannot use --topology-setup-config together with --talker/--listeners flags",
+            err=True,
+        )
+        sys.exit(TchExitCode.USER_INPUT_ERROR)
+
+    # 1. Setup targets and topology type based on user input method
+    targets = []
+    topology_type = DeploymentTopologyType.SINGLE_LOCAL
+
+    if topology_setup_config:
+        # Method 1: YAML config file
+        targets, topology_type = _parse_topology_config(topology_setup_config)
+
+    elif has_cli_topology:
+        # Method 2: CLI flags → B2B
+        if not talker:
+            click.echo("✗ --talker is required when using --listeners", err=True)
+            sys.exit(TchExitCode.USER_INPUT_ERROR)
+        if not listeners:
+            click.echo("✗ --listeners is required when using --talker", err=True)
+            sys.exit(TchExitCode.USER_INPUT_ERROR)
+
+        targets.append(Target(
+            id="talker",
+            ip_address=talker,
+            ssh_user=talker_user,
+            ssh_password=talker_password,
+            ssh_port=talker_port,
+        ))
+        for i, lip in enumerate(listeners):
+            targets.append(Target(
+                id=f"listener-{i + 1}",
+                ip_address=lip,
+                ssh_user=listeners_user,
+                ssh_password=listeners_password,
+                ssh_port=listeners_port,
+            ))
+        
+        if len(listeners) == 1:
+            topology_type = DeploymentTopologyType.B2B
+            logger.info("Configured 1 talker and 1 listener → using B2B topology")
+        else:
+            topology_type = DeploymentTopologyType.MULTI_DUT
+            logger.info(f"Configured 1 talker and {len(listeners)} listeners → using B2B topology with multiple listeners") 
+
+    else:
+        # No topology flags → LOCAL
+        targets.append(Target(id="local", ip_address="127.0.0.1"))
+        topology_type = DeploymentTopologyType.SINGLE_LOCAL
+
+    # 2. Parse orchestration config (stages, workload, benchmark)
+    
+    # ORCHESTRATION STAGES PIPELINE: 
+    #   1) validate_request: validate user input and config files (topology, TCC, TSN, orchestration)
+    #   2) setup: prepare environment on DUTs (e.g. install dependencies, copy files)
+    #   3) config: apply TCC and TSN configurations
+    #   4) workflow: execute defined workflow (e.g. run tests, collect data)
+    #   5) test: run post-configuration tests (e.g. connectivity, performance checks)
+    #   6) teardown: clean up environment on DUTs (e.g. remove files, uninstall dependencies, reset configs)
+    all_stages = list(ORCHESTRATION_STAGES)
+    valid_stages = set(all_stages)
+
+    stages_to_run = []
+    if orchestration_config:
+        try:
+            with open(orchestration_config, "r") as f:
+                orch_data = yaml.safe_load(f) or {}
+        except OSError as e:
+            click.echo(f"✗ Cannot open orchestration config '{orchestration_config}': {e}", err=True)
+            sys.exit(TchExitCode.USER_INPUT_ERROR)
+        except yaml.YAMLError as e:
+            click.echo(f"✗ Invalid YAML in orchestration config '{orchestration_config}': {e}", err=True)
+            sys.exit(TchExitCode.USER_INPUT_ERROR)
+        stages_to_run = orch_data.get("stages", [])
+        
+        # TODO: User configurable plugins 
+        # workload = orch_data.get("workload", "AI Workload")
+        # benchmark = orch_data.get("benchmark", "RTC Test Bench")
+
+        invalid = set(stages_to_run) - valid_stages
+        if invalid:
+            click.echo(
+                f"✗ Invalid stage(s): {', '.join(sorted(invalid))}. "
+                f"Valid stages: {', '.join(all_stages)}",
+                err=True,
+            )
+            sys.exit(TchExitCode.USER_INPUT_ERROR)
+    else:
+        stages_to_run = all_stages  # default to all stages if no orchestration config provided
+
+    # 3. Validate TCC and TSN config files (click.Path(exists=True) already ensures they exist)
+    app_config = ctx.obj.get("app_config")
+    config_hub = TimeHubService(app_config)
+    try:
+        if not config_hub.validate_config(tcc_config):
+            click.echo(f"✗ TCC config file '{tcc_config}' is invalid", err=True)
+            # TEMP-BYPASS: since TCC config validation is not fully implemented, 
+            # we will log the error but allow orchestration to proceed for now.
+            #sys.exit(TchExitCode.USER_INPUT_ERROR)
+        if not config_hub.validate_config(tsn_config):
+            click.echo(f"✗ TSN config file '{tsn_config}' is invalid", err=True)
+            # TEMP-BYPASS: since TSN config validation is not fully implemented, 
+            # we will log the error but allow orchestration to proceed for now.
+            #sys.exit(TchExitCode.USER_INPUT_ERROR)
+    except TSNConfigError as e:
+        click.echo(f"✗ Config validation failed: {e}", err=True)
+        sys.exit(TchExitCode.USER_INPUT_ERROR)
+
+    # 4. Build OrchestratorConfig
+    orchestrator_request_config = OrchestratorConfig(
+        topology_type=topology_type,
+        targets=targets,
+        tcc_config=tcc_config,
+        tsn_config=tsn_config,
+        stages_to_run=stages_to_run,
+        dry_run=dry_run,
+        test_duration=test_duration,
+        timeout=timeout,
+    )
+
+    # Show orchestration plan summary 
+    click.echo("\nOrchestration Plan Summary")
+    click.echo("=" * 40)
+    click.echo(f"Topology               : {topology_type.value}")
+    click.echo(f"Targets                : {len(targets)}")
+    for t in targets:
+        click.echo(f"  [{t.id}] {t.ip_address}:{t.ssh_port}")
+    click.echo(f"Orchestration Stages   : {', '.join(stages_to_run)}")
+    click.echo(f"TCC                    : {tcc_config}")
+    click.echo(f"TSN                    : {tsn_config}")
+    if test_duration:
+        click.echo(f"Duration               : {test_duration}s")
+    if timeout:
+        click.echo(f"Timeout                : {timeout}s")
+    if dry_run:
+        click.echo("DRY RUN Mode           : No changes will be applied")
+    click.echo("=" * 40)
+    click.echo("")
+
+    if dry_run:
+        click.echo("✓ Dry run complete — no actions were executed")
+        sys.exit(TchExitCode.SUCCESS)
+
+    logger.info(
+        "Sending orchestration request: topology=%s, targets=%d",
+        topology_type.value, len(targets),
+    )
+
+    # Send request to orchestrator daemon
+    try:
+        result = send_orchestration_request(orchestrator_request_config)
+        if result is None:
+            click.echo(
+                "✗ Orchestration failed: no response received from orchestrator daemon",
+                err=True,
+            )
+            sys.exit(TchExitCode.UNEXPECTED_ERROR)
+
+        for line in result.logs:
+            click.echo(f"  {line}")
+
+        if result.success:
+            click.echo("\n✓ Orchestration completed successfully")
+            sys.exit(TchExitCode.SUCCESS)
+        else:
+            if result.errors:
+                for err in result.errors:
+                    click.echo(f"✗ {err}", err=True)
+            click.echo("\n✗ Orchestration failed", err=True)
+            sys.exit(TchExitCode.UNEXPECTED_ERROR)
+
+    except ConnectionRefusedError:
+        click.echo(
+            "✗ Could not connect to Orchestrator daemon. Is tch.service running?",
+            err=True,
+        )
+        sys.exit(TchExitCode.UNEXPECTED_ERROR)
+
+    except Exception:
+        logger.exception("Unexpected error during orchestration")
+        click.echo("✗ Unexpected error during orchestration", err=True)
+        sys.exit(TchExitCode.UNEXPECTED_ERROR)
+
+
+def _parse_topology_config(config_path: str) -> tuple[list[Target], DeploymentTopologyType]:
+    """
+    Parse a topology YAML file and return (targets, topology_type).
+
+    Example topology YAML structure:
+        defaults:
+            ssh_user: user
+            ssh_password: user123
+            ssh_port: 22
+        talker:
+            ip: 192.168.1.10    # required
+            ssh_user: root
+            ssh_password: talker123
+        listeners:
+            ip: 192.168.1.20    # required, can be a list for multiple listeners
+            ssh_user: root
+            ssh_password: listener123
+
+    :param config_path: Path to the topology YAML file
+    :raises TSNConfigError: If the file cannot be opened or is empty/invalid
+    """
+
+    try:
+        with open(config_path, "r") as f:
+            data = yaml.safe_load(f)
+    except OSError as e:
+        raise TSNConfigError(f"Cannot open topology config '{config_path}': {e}") from e
+    except yaml.YAMLError as e:
+        raise TSNConfigError(f"Invalid YAML in topology config '{config_path}': {e}") from e
+
+    if not data:
+        raise TSNConfigError(f"Topology config '{config_path}' is empty or contains no valid data")
+
+    # Load defaults and apply to targets if user-specific values not provided.
+    defaults = data.get("defaults", {})
+    def_user = defaults.get("ssh_user", "root")
+    def_pass = defaults.get("ssh_password", "demo123")
+    def_port = defaults.get("ssh_port", 22)
+
+    targets = []
+
+    # Talker
+    talker_data = data.get("talker")
+    if talker_data:
+        talker_ip = talker_data.get("ip")
+        if not talker_ip:
+            raise TSNConfigError("Talker entry is missing required 'ip' field")
+        targets.append(Target(
+            id="talker",
+            ip_address=talker_ip,
+            ssh_user=talker_data.get("ssh_user", def_user),
+            ssh_password=talker_data.get("ssh_password", def_pass),
+            ssh_port=talker_data.get("ssh_port", def_port),
+        ))
+
+    # Listeners. This is Topology-dependent: single dict or list of dicts
+    listeners_data = data.get("listeners", [])
+    if isinstance(listeners_data, dict):
+        listeners_data = [listeners_data]
+    for i, ld in enumerate(listeners_data):
+        listener_ip = ld.get("ip")
+        if not listener_ip:
+            raise TSNConfigError(f"Listener {i + 1} is missing required 'ip' field")
+        targets.append(Target(
+            id=f"listener-{i + 1}",
+            ip_address=listener_ip,
+            ssh_user=ld.get("ssh_user", def_user),
+            ssh_password=ld.get("ssh_password", def_pass),
+            ssh_port=ld.get("ssh_port", def_port),
+        ))
+
+    logger.info(f"Parsed topology config: {len(targets)} targets found")
+    logger.info(f"Targets: {[t.ip_address for t in targets]}")
+    logger.debug(f"Defaults: user={def_user}, port={def_port}")
+    
+    # Auto-detect topology type based on roles present
+    has_talker = talker_data is not None
+    has_listeners = len(listeners_data) > 0
+
+    if not has_talker and not has_listeners:
+        topology_type = DeploymentTopologyType.SINGLE_LOCAL
+        targets.append(Target(id="local", ip_address="127.0.0.1"))
+    elif has_talker and has_listeners:
+        topology_type = DeploymentTopologyType.B2B
+    else:
+        topology_type = DeploymentTopologyType.MULTI_DUT
+
+    return targets, topology_type
 
 
 def main():
