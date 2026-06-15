@@ -145,7 +145,7 @@ class FrequencyProfile:
     """Represents a CPU frequency profile."""
     profile_id: str
     frequency_config: FrequencyConfig
-    idle_config: Optional[IdleConfig] = field(default_factory=IdleConfig)
+    idle_config: Optional[IdleConfig] = None
 
 
 @dataclass
@@ -182,6 +182,7 @@ class CpuSchedulingPlan:
 
 @dataclass
 class CpuFrequency:
+    """CPU frequency configuration."""
     frequency_profiles: dict[str, FrequencyProfile] = field(default_factory=_default_frequency_profiles)  # profile_id -> FrequencyProfile
     profile_assignments: ProfileAssignment = field(default_factory=ProfileAssignment)  # CPU to profile assignments
 

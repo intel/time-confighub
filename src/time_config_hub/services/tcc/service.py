@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Time Config TCC Service API Implementation 
+Time Config TCC Service API Implementation
 
-This service class provides methods to apply, validate, reset and 
-check the status of Intel TCC configurations. 
+This service class provides methods to apply, validate, reset and
+check the status of Intel TCC configurations.
 
-It uses the ConfigParserService for parsing configuration files and 
-the TCCStateStore for tracking applied configurations and status. 
-The TCCService implements the TCCServiceInterface protocol, allowing 
+It uses the ConfigParserService for parsing configuration files and
+the TCCStateStore for tracking applied configurations and status.
+The TCCService implements the TCCServiceInterface protocol, allowing
 it to be used interchangeably with other implementations if needed.
 
 """
@@ -71,6 +71,7 @@ class TCCService(TCCServiceInterface):
             if validation_issues:
                 for issue in validation_issues:
                     logger.warning(f"Configuration validation: {issue}")
+                    return
 
             if dry_run:
                 logger.info("Dry-run enabled. TCC configuration was validated only.")
@@ -118,6 +119,7 @@ class TCCService(TCCServiceInterface):
             if validation_issues:
                 for issue in validation_issues:
                     logger.warning(f"Configuration validation: {issue}")
+                return False
 
             logger.info(f"TCC configuration file {config_file} is valid.")
             return True

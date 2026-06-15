@@ -59,13 +59,6 @@ class TCCRawToDataModelMapping:
         doc = roots[0]
         profile_id = TCCRawToDataModelMapping._extract_string(doc, "profile-id")
         if not profile_id:
-            for candidate in roots[1:]:
-                profile_id = TCCRawToDataModelMapping._extract_string(candidate, "profile-id")
-                if profile_id:
-                    doc = candidate
-                    break
-
-        if not profile_id:
             raise InvalidInputDataError("TCC profile must contain 'profile-id'")
 
         profile_description = TCCRawToDataModelMapping._extract_string(doc, "profile-description")
@@ -258,9 +251,9 @@ class TCCRawToDataModelMapping:
                 if not isinstance(frequency_info, dict):
                     frequency_info = {}
 
-                governor = TCCRawToDataModelMapping._extract_string(frequency_info, "governor") or "performance"
-                min_freq = TCCRawToDataModelMapping._extract_int(frequency_info, "min-freq-mhz") or 0
-                max_freq = TCCRawToDataModelMapping._extract_int(frequency_info, "max-freq-mhz") or 0
+                governor = TCCRawToDataModelMapping._extract_string(frequency_info, "governor")
+                min_freq = TCCRawToDataModelMapping._extract_int(frequency_info, "min-freq-mhz")
+                max_freq = TCCRawToDataModelMapping._extract_int(frequency_info, "max-freq-mhz")
 
                 # Get C-State Idle Control settings
                 idle_info = freq_profile.get("idle", {})
