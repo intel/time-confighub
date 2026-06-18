@@ -8,8 +8,8 @@ This module defines the core dataclasses representing TCC configuration
 entities. These classes encapsulate the configuration aspects of the platform,
 including:
 
-  1) CPU scheduling (core isolation) configuration
-  2) CPU frequency control (governor selection, min/max frequencies, C-state overrides)
+  1) Core isolation configuration
+  2) Core frequency control (governor selection, min/max frequencies, C-state overrides)
   3) Uncore frequency control
   4) Platform QoS resource configuration
 
@@ -58,7 +58,7 @@ def _default_state_overrides() -> list["StateOverride"]:
     return []
 
 
-def _default_cpu_assignments() -> list["CpuAssignment"]:
+def _default_core_assignments() -> list["CoreAssignment"]:
     return []
 
 
@@ -66,37 +66,37 @@ def _default_frequency_profiles() -> dict[str, "FrequencyProfile"]:
     return {}
 
 
-def _default_isolate_assignments() -> list["CpuIsolateAssignment"]:
+def _default_isolate_assignments() -> list["CoreIsolateAssignment"]:
     return []
 
 
-def _default_ring_freqs() -> list["CpuRingRatio"]:
+def _default_ring_freqs() -> list["CoreRingRatio"]:
     return []
 
 
-def _default_cpu_qos_associations() -> list["CpuQosAssociation"]:
+def _default_core_qos_associations() -> list["CoreQosAssociation"]:
     return []
 
 
 @dataclass
-class CpuIsolateAssignment:
-    """Represents a single CPU isolation assignment."""
-    cpu_id: int
+class CoreIsolateAssignment:
+    """Represents a single core isolation assignment."""
+    core_id: int
     isolate: bool
 
 
 @dataclass
 class ResourceMonitoringConfig:
-    """Resource monitoring configuration for a CPU."""
+    """Resource monitoring configuration for a Core."""
     enabled: bool
     rmid_id: Optional[int] = None           # When enabled=true, identifies the RMID to use for monitoring
     rmid_label: Optional[str] = None        # Optional human-readable label for the RMID, useful for logging and debugging
 
 
 @dataclass
-class CpuQosAssociation:
-    """Represents a single CPU to QoS class association."""
-    cpu_id: int
+class CoreQosAssociation:
+    """Represents a single Core to QoS class association."""
+    core_id: int
     class_of_service_id: int
     resource_monitoring: ResourceMonitoringConfig
 
@@ -142,29 +142,29 @@ class FrequencyConfig:
 
 @dataclass
 class FrequencyProfile:
-    """Represents a CPU frequency profile."""
+    """Represents a Core frequency profile."""
     profile_id: str
     frequency_config: FrequencyConfig
     idle_config: Optional[IdleConfig] = None
 
 
 @dataclass
-class CpuAssignment:
-    """Represents assignment of a CPU to a frequency profile."""
-    cpu_id: int
+class CoreAssignment:
+    """Represents assignment of a Core to a frequency profile."""
+    core_id: int
     profile_ref: str  # Reference to FrequencyProfile.profile_id
 
 
 @dataclass
 class ProfileAssignment:
-    """Represents the CPU to frequency profile assignments."""
-    cpu_assignments: list[CpuAssignment] = field(default_factory=_default_cpu_assignments)
+    """Represents the Core to frequency profile assignments."""
+    core_assignments: list[CoreAssignment] = field(default_factory=_default_core_assignments)
 
 
 @dataclass
-class CpuRingRatio:
-    """Represents uncore frequency configuration for a single CPU."""
-    cpu_id: int
+class CoreRingRatio:
+    """Represents uncore frequency configuration for a single Core."""
+    core_id: int
     min_ring_ratio: int
     max_ring_ratio: int
     # Constraint: min_ring_ratio == max_ring_ratio
@@ -175,38 +175,38 @@ class CpuRingRatio:
 # ==========================================
 
 @dataclass
-class CpuSchedulingPlan:
-    """CPU scheduling configuration."""
-    assignments: list[CpuIsolateAssignment] = field(default_factory=_default_isolate_assignments)
+class CoreIsolationPlan:
+    """Core scheduling configuration."""
+    assignments: list[CoreIsolateAssignment] = field(default_factory=_default_isolate_assignments)
 
 
 @dataclass
-class CpuFrequency:
-    """CPU frequency configuration."""
+class CoreFrequency:
+    """Core frequency configuration."""
     frequency_profiles: dict[str, FrequencyProfile] = field(default_factory=_default_frequency_profiles)  # profile_id -> FrequencyProfile
-    profile_assignments: ProfileAssignment = field(default_factory=ProfileAssignment)  # CPU to profile assignments
+    profile_assignments: ProfileAssignment = field(default_factory=ProfileAssignment)  # Core to profile assignments
 
     def validate(self) -> None:
         for profile in self.frequency_profiles.values():
             profile.frequency_config.validate()
 
         # leafref integrity: profile_ref must exist in frequency_profiles
-        for a in self.profile_assignments.cpu_assignments:
+        for a in self.profile_assignments.core_assignments:
             if a.profile_ref not in self.frequency_profiles:
-                raise ValueError(f"Invalid profile assignment: CPU {a.cpu_id} references undefined profile '{a.profile_ref}'")
+                raise ValueError(f"Invalid profile assignment: Core {a.core_id} references undefined profile '{a.profile_ref}'")
 
 
 @dataclass
-class CpuUncoreFrequency:
+class UncoreFrequency:
     """Uncore frequency configuration."""
-    ring_freqs: list[CpuRingRatio] = field(default_factory=_default_ring_freqs)
+    ring_freqs: list[CoreRingRatio] = field(default_factory=_default_ring_freqs)
 
 
 @dataclass
 class PlatformQosResourceConfig:
     """Platform QoS resource configuration container."""
 
-    cpu_qos_associations: list[CpuQosAssociation] = field(default_factory=_default_cpu_qos_associations)
+    core_qos_associations: list[CoreQosAssociation] = field(default_factory=_default_core_qos_associations)
 
 
 @dataclass
@@ -217,7 +217,7 @@ class TccConfigProfile:
 
     profile_id: str
     profile_description: Optional[str] = None
-    cpu_scheduling: Optional[CpuSchedulingPlan] = None
-    cpu_frequency: Optional[CpuFrequency] = None
-    uncore_frequency: Optional[CpuUncoreFrequency] = None
+    core_isolation: Optional[CoreIsolationPlan] = None
+    core_frequency: Optional[CoreFrequency] = None
+    uncore_frequency: Optional[UncoreFrequency] = None
     platform_qos_resource_config: Optional[PlatformQosResourceConfig] = None

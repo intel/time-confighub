@@ -12,8 +12,8 @@ This module provides logic to transform raw libyang-parsed documents
 
 It supports:
 - Extracting profile ID and description
-- Mapping CPU scheduling assignments
-- Mapping CPU frequency profiles and assignments
+- Mapping Core isolation assignments
+- Mapping Core frequency profiles and assignments
 - Mapping uncore frequency and platform QoS resource settings
 
 """
@@ -62,16 +62,16 @@ class TCCRawToDataModelMapping:
             raise InvalidInputDataError("TCC profile must contain 'profile-id'")
 
         profile_description = TCCRawToDataModelMapping._extract_string(doc, "profile-description")
-        cpu_scheduling = TCCRawToDataModelMapping._map_cpu_scheduling(roots)
-        cpu_frequency = TCCRawToDataModelMapping._map_cpu_frequency(roots)
+        core_isolation = TCCRawToDataModelMapping._map_core_isolation(roots)
+        core_frequency = TCCRawToDataModelMapping._map_core_frequency(roots)
         uncore_frequency = TCCRawToDataModelMapping._map_uncore_frequency(roots)
         platform_qos_resource_config = TCCRawToDataModelMapping._map_platform_qos_resource_config(roots)
 
         return tcc_types.TccConfigProfile(
             profile_id=profile_id,
             profile_description=profile_description,
-            cpu_scheduling=cpu_scheduling,
-            cpu_frequency=cpu_frequency,
+            core_isolation=core_isolation,
+            core_frequency=core_frequency,
             uncore_frequency=uncore_frequency,
             platform_qos_resource_config=platform_qos_resource_config,
         )
@@ -182,61 +182,61 @@ class TCCRawToDataModelMapping:
 
 
     @staticmethod
-    def _map_cpu_scheduling(docs: list[dict[str, Any]]) -> Optional[tcc_types.CpuSchedulingPlan]:
+    def _map_core_isolation(docs: list[dict[str, Any]]) -> Optional[tcc_types.CoreIsolationPlan]:
         """
-        Map CPU scheduling section from documents to CpuSchedulingPlan dataclass.
+        Map core isolation scheduling section from documents to CoreIsolationPlan dataclass.
 
         :param List[Dict[str, Any]] docs: Parsed profile roots
-        :return: CpuSchedulingPlan instance or None if section not found
-        :rtype: Optional[CpuSchedulingPlan]
+        :return: CoreIsolationPlan instance or None if section not found
+        :rtype: Optional[tcc_types.CoreIsolationPlan]
         """
         section_found = False
-        cpu_assignments: list[tcc_types.CpuIsolateAssignment] = []
+        core_assignments: list[tcc_types.CoreIsolateAssignment] = []
 
         for doc in docs:
-            cpu_sched_section = doc.get("cpu-scheduling")
-            if not isinstance(cpu_sched_section, dict):
+            core_sched_section = doc.get("core-scheduling")
+            if not isinstance(core_sched_section, dict):
                 continue
 
             section_found = True
-            assignments = TCCRawToDataModelMapping._convert_to_list(cpu_sched_section.get("cpu-assignment", []))
+            assignments = TCCRawToDataModelMapping._convert_to_list(core_sched_section.get("core-assignment", []))
 
             for assignment in assignments:
 
-                cpu_id = TCCRawToDataModelMapping._extract_int(assignment, "cpu-id")
+                core_id = TCCRawToDataModelMapping._extract_int(assignment, "core-id")
                 isolate = TCCRawToDataModelMapping._extract_bool(assignment, "isolate")
 
-                if cpu_id is not None:
-                    cpu_assignments.append(
-                        tcc_types.CpuIsolateAssignment(cpu_id=cpu_id, isolate=isolate)
+                if core_id is not None:
+                    core_assignments.append(
+                        tcc_types.CoreIsolateAssignment(core_id=core_id, isolate=isolate)
                     )
 
         if not section_found:
             return None
-        return tcc_types.CpuSchedulingPlan(assignments=cpu_assignments)
+        return tcc_types.CoreIsolationPlan(assignments=core_assignments)
 
     @staticmethod
-    def _map_cpu_frequency(docs: list[dict[str, Any]]) -> Optional[tcc_types.CpuFrequency]:
+    def _map_core_frequency(docs: list[dict[str, Any]]) -> Optional[tcc_types.CoreFrequency]:
         """
-        Map CPU frequency section from documents to CpuFrequency dataclass.
+        Map Core frequency section from documents to CoreFrequency dataclass.
 
         :param List[Dict[str, Any]] docs: Parsed profile roots
-        :return: CpuFrequency instance or None if section not found
-        :rtype: Optional[CpuFrequency]
+        :return: CoreFrequency instance or None if section not found
+        :rtype: Optional[tcc_types.CoreFrequency]
         """
         section_found = False
         freq_profiles: dict[str, tcc_types.FrequencyProfile] = {}
-        cpu_assignments: list[tcc_types.CpuAssignment] = []
+        core_assignments: list[tcc_types.CoreAssignment] = []
 
         for doc in docs:
-            cpu_freq_section = doc.get("cpu-frequency")
-            if not isinstance(cpu_freq_section, dict):
+            core_freq_section = doc.get("core-frequency")
+            if not isinstance(core_freq_section, dict):
                 continue
 
             section_found = True
 
             freq_profile_list = TCCRawToDataModelMapping._convert_to_list(
-                cpu_freq_section.get("frequency-profile", [])
+                core_freq_section.get("frequency-profile", [])
             )
 
             for freq_profile in freq_profile_list:
@@ -246,7 +246,7 @@ class TCCRawToDataModelMapping:
                 if not profile_id:
                     raise InvalidInputDataError("Each frequency-profile must contain a 'profile-id'")
 
-                # Get CPU Frequency Control settings
+                # Get Core Frequency Control settings
                 frequency_info = freq_profile.get("frequency", {})
                 if not isinstance(frequency_info, dict):
                     frequency_info = {}
@@ -295,43 +295,43 @@ class TCCRawToDataModelMapping:
                     idle_config=idle_config,
                 )
 
-            profile_assign_section = cpu_freq_section.get("profile-assignment", {})
+            profile_assign_section = core_freq_section.get("profile-assignment", {})
             if not isinstance(profile_assign_section, dict):
                 profile_assign_section = {}
 
-            cpu_assign_list = TCCRawToDataModelMapping._convert_to_list(
-                profile_assign_section.get("cpu-assignment", [])
+            core_assign_list = TCCRawToDataModelMapping._convert_to_list(
+                profile_assign_section.get("core-assignment", [])
             )
 
-            for cpu_assignment in cpu_assign_list:
+            for core_assignment in core_assign_list:
 
-                cpu_id = TCCRawToDataModelMapping._extract_int(cpu_assignment, "cpu-id")
-                profile_ref = TCCRawToDataModelMapping._extract_string(cpu_assignment, "profile-ref")
+                core_id = TCCRawToDataModelMapping._extract_int(core_assignment, "core-id")
+                profile_ref = TCCRawToDataModelMapping._extract_string(core_assignment, "profile-ref")
 
-                if cpu_id is not None and profile_ref:
-                    cpu_assignments.append(
-                        tcc_types.CpuAssignment(cpu_id=cpu_id, profile_ref=profile_ref)
+                if core_id is not None and profile_ref:
+                    core_assignments.append(
+                        tcc_types.CoreAssignment(core_id=core_id, profile_ref=profile_ref)
                     )
 
         if not section_found:
             return None
 
-        return tcc_types.CpuFrequency(
+        return tcc_types.CoreFrequency(
             frequency_profiles=freq_profiles,
-            profile_assignments=tcc_types.ProfileAssignment(cpu_assignments=cpu_assignments),
+            profile_assignments=tcc_types.ProfileAssignment(core_assignments=core_assignments),
         )
 
     @staticmethod
-    def _map_uncore_frequency(docs: list[dict[str, Any]]) -> Optional[tcc_types.CpuUncoreFrequency]:
+    def _map_uncore_frequency(docs: list[dict[str, Any]]) -> Optional[tcc_types.UncoreFrequency]:
         """
         Map uncore frequency section from documents.
 
         :param List[Dict[str, Any]] docs: Parsed profile roots
-        :return: CpuUncoreFrequency instance or None if section not found
-        :rtype: Optional[CpuUncoreFrequency]
+        :return: UncoreFrequency instance or None if section not found
+        :rtype: Optional[tcc_types.UncoreFrequency]
         """
         section_found = False
-        ring_freqs: list[tcc_types.CpuRingRatio] = []
+        ring_freqs: list[tcc_types.CoreRingRatio] = []
 
         for doc in docs:
             uncore_section = doc.get("uncore-frequency")
@@ -339,22 +339,22 @@ class TCCRawToDataModelMapping:
                 continue
 
             section_found = True
-            cpu_ring_freq_list = TCCRawToDataModelMapping._convert_to_list(
-                uncore_section.get("cpu-ring-freq", [])
+            core_ring_freq_list = TCCRawToDataModelMapping._convert_to_list(
+                uncore_section.get("core-ring-freq", [])
             )
 
-            for cpu_ring_freq in cpu_ring_freq_list:
+            for core_ring_freq in core_ring_freq_list:
 
-                cpu_id = TCCRawToDataModelMapping._extract_int(cpu_ring_freq, "cpu-id")
-                min_ring_ratio = TCCRawToDataModelMapping._extract_int(cpu_ring_freq, "min-ring-ratio")
-                max_ring_ratio = TCCRawToDataModelMapping._extract_int(cpu_ring_freq, "max-ring-ratio")
+                core_id = TCCRawToDataModelMapping._extract_int(core_ring_freq, "core-id")
+                min_ring_ratio = TCCRawToDataModelMapping._extract_int(core_ring_freq, "min-ring-ratio")
+                max_ring_ratio = TCCRawToDataModelMapping._extract_int(core_ring_freq, "max-ring-ratio")
 
-                if cpu_id is None or min_ring_ratio is None or max_ring_ratio is None:
+                if core_id is None or min_ring_ratio is None or max_ring_ratio is None:
                     continue
 
                 ring_freqs.append(
-                    tcc_types.CpuRingRatio(
-                        cpu_id=cpu_id,
+                    tcc_types.CoreRingRatio(
+                        core_id=core_id,
                         min_ring_ratio=min_ring_ratio,
                         max_ring_ratio=max_ring_ratio,
                     )
@@ -362,7 +362,7 @@ class TCCRawToDataModelMapping:
 
         if not section_found:
             return None
-        return tcc_types.CpuUncoreFrequency(ring_freqs=ring_freqs)
+        return tcc_types.UncoreFrequency(ring_freqs=ring_freqs)
 
     @staticmethod
     def _map_platform_qos_resource_config(
@@ -376,7 +376,7 @@ class TCCRawToDataModelMapping:
         :rtype: Optional[PlatformQosResourceConfig]
         """
         section_found = False
-        associations: list[tcc_types.CpuQosAssociation] = []
+        associations: list[tcc_types.CoreQosAssociation] = []
 
         for doc in docs:
             qos_section = doc.get("platform-qos-resource-config")
@@ -384,21 +384,21 @@ class TCCRawToDataModelMapping:
                 continue
 
             section_found = True
-            cpu_pqr_assoc_list = TCCRawToDataModelMapping._convert_to_list(
-                qos_section.get("cpu-pqr-assoc", [])
+            core_pqr_assoc_list = TCCRawToDataModelMapping._convert_to_list(
+                qos_section.get("core-pqr-assoc", [])
             )
 
-            for cpu_pqr_assoc in cpu_pqr_assoc_list:
+            for core_pqr_assoc in core_pqr_assoc_list:
 
-                cpu_id = TCCRawToDataModelMapping._extract_int(cpu_pqr_assoc, "cpu-id")
+                core_id = TCCRawToDataModelMapping._extract_int(core_pqr_assoc, "core-id")
                 class_of_service_id = TCCRawToDataModelMapping._extract_int(
-                    cpu_pqr_assoc,
+                    core_pqr_assoc,
                     "class-of-service-id",
                 )
-                if cpu_id is None or class_of_service_id is None:
+                if core_id is None or class_of_service_id is None:
                     continue
 
-                resource_monitoring_node = cpu_pqr_assoc.get("resource-monitoring", {})
+                resource_monitoring_node = core_pqr_assoc.get("resource-monitoring", {})
                 if not isinstance(resource_monitoring_node, dict):
                     resource_monitoring_node = {}
 
@@ -418,8 +418,8 @@ class TCCRawToDataModelMapping:
                 )
 
                 associations.append(
-                    tcc_types.CpuQosAssociation(
-                        cpu_id=cpu_id,
+                    tcc_types.CoreQosAssociation(
+                        core_id=core_id,
                         class_of_service_id=class_of_service_id,
                         resource_monitoring=resource_monitoring,
                     )
@@ -427,4 +427,4 @@ class TCCRawToDataModelMapping:
 
         if not section_found:
             return None
-        return tcc_types.PlatformQosResourceConfig(cpu_qos_associations=associations)
+        return tcc_types.PlatformQosResourceConfig(core_qos_associations=associations)

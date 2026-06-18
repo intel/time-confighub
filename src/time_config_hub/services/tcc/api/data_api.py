@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Optional, Set
 
 from time_config_hub.services.tcc.schemas.tcc_data_mapping import TCCRawToDataModelMapping
 from time_config_hub.services.tcc.schemas.tcc_data_types import (
-    CpuFrequency,
-    CpuSchedulingPlan,
+    CoreFrequency,
+    CoreIsolationPlan,
     FrequencyProfile,
 )
 
@@ -24,8 +24,8 @@ class TCCConfigDataAPI:
 
     Provides methods to:
     - Query available containers
-    - Access CPU scheduling configuration
-    - Access CPU frequency profiles and assignments
+    - Access Core isolation scheduling configuration
+    - Access Core frequency profiles and assignments
     - Validate configuration consistency
     """
 
@@ -57,11 +57,11 @@ class TCCConfigDataAPI:
         """
         configured_subsystems = set()
 
-        if self.mapped_data.cpu_scheduling:
-            configured_subsystems.add("cpu-scheduling")
+        if self.mapped_data.core_isolation:
+            configured_subsystems.add("core-isolation")
 
-        if self.mapped_data.cpu_frequency:
-            configured_subsystems.add("cpu-frequency")
+        if self.mapped_data.core_frequency:
+            configured_subsystems.add("core-frequency")
 
         if self.mapped_data.uncore_frequency:
             configured_subsystems.add("uncore-frequency")
@@ -71,55 +71,55 @@ class TCCConfigDataAPI:
 
         return configured_subsystems
 
-    def cpu_scheduling(self) -> Optional[CpuSchedulingPlan]:
+    def core_isolation(self) -> Optional[CoreIsolationPlan]:
         """
-        Get CPU scheduling configuration.
+        Get Core isolation configuration.
 
-        :return: CpuSchedulingPlan instance or None if not configured
-        :rtype: Optional[CpuSchedulingPlan]
+        :return: CoreIsolationPlan instance or None if not configured
+        :rtype: Optional[CoreIsolationPlan]
         """
-        return self.mapped_data.cpu_scheduling
+        return self.mapped_data.core_isolation
 
-    def isolated_cpus(self) -> List[int]:
+    def isolated_cores(self) -> List[int]:
         """
-        Get list of CPU IDs marked as isolated.
+        Get list of Core IDs marked as isolated.
 
-        :return: List of isolated CPU IDs
+        :return: List of isolated Core IDs
         :rtype: List[int]
         """
-        if not self.mapped_data.cpu_scheduling:
+        if not self.mapped_data.core_isolation:
             return []
 
         isolated = []
-        for assignment in self.mapped_data.cpu_scheduling.assignments:
+        for assignment in self.mapped_data.core_isolation.assignments:
             if assignment.isolate:
-                isolated.append(assignment.cpu_id)
+                isolated.append(assignment.core_id)
         return isolated
 
-    def non_isolated_cpus(self) -> List[int]:
+    def non_isolated_cores(self) -> List[int]:
         """
-        Get list of CPU IDs NOT marked as isolated (housekeeping).
+        Get list of Core IDs NOT marked as isolated (housekeeping).
 
-        :return: List of non-isolated CPU IDs
+        :return: List of non-isolated Core IDs
         :rtype: List[int]
         """
-        if not self.mapped_data.cpu_scheduling:
+        if not self.mapped_data.core_isolation:
             return []
 
         non_isolated = []
-        for assignment in self.mapped_data.cpu_scheduling.assignments:
+        for assignment in self.mapped_data.core_isolation.assignments:
             if not assignment.isolate:
-                non_isolated.append(assignment.cpu_id)
+                non_isolated.append(assignment.core_id)
         return non_isolated
 
-    def cpu_frequency_profiles(self) -> Optional[CpuFrequency]:
+    def core_frequency_profiles(self) -> Optional[CoreFrequency]:
         """
-        Get CPU frequency profile configuration.
+        Get Core frequency profile configuration.
 
-        :return: CpuFrequency instance or None if not configured
-        :rtype: Optional[CpuFrequency]
+        :return: CoreFrequency instance or None if not configured
+        :rtype: Optional[CoreFrequency]
         """
-        return self.mapped_data.cpu_frequency
+        return self.mapped_data.core_frequency
 
     def frequency_profile(self, profile_id: str) -> Optional[FrequencyProfile]:
         """
@@ -129,9 +129,9 @@ class TCCConfigDataAPI:
         :return: FrequencyProfile instance or None if not found
         :rtype: Optional[FrequencyProfile]
         """
-        if not self.mapped_data.cpu_frequency:
+        if not self.mapped_data.core_frequency:
             return None
-        return self.mapped_data.cpu_frequency.frequency_profiles.get(profile_id)
+        return self.mapped_data.core_frequency.frequency_profiles.get(profile_id)
 
     def all_frequency_profiles(self) -> Dict[str, FrequencyProfile]:
         """
@@ -140,63 +140,63 @@ class TCCConfigDataAPI:
         :return: Dictionary mapping profile ID to FrequencyProfile instance
         :rtype: Dict[str, FrequencyProfile]
         """
-        if not self.mapped_data.cpu_frequency:
+        if not self.mapped_data.core_frequency:
             return {}
-        return self.mapped_data.cpu_frequency.frequency_profiles
+        return self.mapped_data.core_frequency.frequency_profiles
 
-    def cpu_frequency_assignment(self, cpu_id: int) -> Optional[str]:
+    def core_frequency_assignment(self, core_id: int) -> Optional[str]:
         """
-        Get frequency profile assigned to a specific CPU.
+        Get frequency profile assigned to a specific core.
 
-        :param int cpu_id: CPU ID to query
-        :return: Profile ID assigned to the CPU, or None if not assigned
+        :param int core_id: Core ID to query
+        :return: Profile ID assigned to the core, or None if not assigned
         :rtype: Optional[str]
         """
-        if not self.mapped_data.cpu_frequency:
+        if not self.mapped_data.core_frequency:
             return None
-        for assignment in self.mapped_data.cpu_frequency.profile_assignments.cpu_assignments:
-            if assignment.cpu_id == cpu_id:
+        for assignment in self.mapped_data.core_frequency.profile_assignments.core_assignments:
+            if assignment.core_id == core_id:
                 return assignment.profile_ref
         return None
 
-    def frequency_profile_for_cpu(self, cpu_id: int) -> Optional[FrequencyProfile]:
+    def frequency_profile_for_core(self, core_id: int) -> Optional[FrequencyProfile]:
         """
-        Get the frequency profile configuration for a specific CPU.
+        Get the frequency profile configuration for a specific core.
 
-        :param int cpu_id: CPU ID to query
-        :return: FrequencyProfile instance or None if CPU not assigned a profile
+        :param int core_id: Core ID to query
+        :return: FrequencyProfile instance or None if core not assigned a profile
         :rtype: Optional[FrequencyProfile]
         """
-        if not self.mapped_data.cpu_frequency:
+        if not self.mapped_data.core_frequency:
             return None
-        profile_id = self.cpu_frequency_assignment(cpu_id)
+        profile_id = self.core_frequency_assignment(core_id)
         if not profile_id:
             return None
-        return self.mapped_data.cpu_frequency.frequency_profiles.get(profile_id)
+        return self.mapped_data.core_frequency.frequency_profiles.get(profile_id)
 
-    def cpus_for_frequency_profile(self, profile_id: str) -> List[int]:
+    def cores_for_frequency_profile(self, profile_id: str) -> List[int]:
         """
-        Get all CPUs assigned to a specific frequency profile.
+        Get all cores assigned to a specific frequency profile.
 
         :param str profile_id: Profile ID to query
-        :return: List of CPU IDs assigned to the profile
+        :return: List of core IDs assigned to the profile
         :rtype: List[int]
         """
-        if not self.mapped_data.cpu_frequency:
+        if not self.mapped_data.core_frequency:
             return []
 
-        cpu_ids = []
-        for assignment in self.mapped_data.cpu_frequency.profile_assignments.cpu_assignments:
+        core_ids = []
+        for assignment in self.mapped_data.core_frequency.profile_assignments.core_assignments:
             if assignment.profile_ref == profile_id:
-                cpu_ids.append(assignment.cpu_id)
-        return cpu_ids
+                core_ids.append(assignment.core_id)
+        return core_ids
 
     def validate_consistency(self) -> List[str]:
         """
         Validate configuration consistency and return any warnings/errors.
 
         Checks for:
-        - CPUs assigned in scheduling but not in frequency profiles
+        - Cores assigned in core isolation but not in frequency profiles
         - Undefined profile references
         - Missing or inconsistent configurations
 
@@ -205,30 +205,30 @@ class TCCConfigDataAPI:
         """
         issues: List[str] = []
 
-        # Check CPU scheduling vs frequency assignments
-        if self.mapped_data.cpu_scheduling and self.mapped_data.cpu_frequency:
-            scheduled_cpus = {a.cpu_id for a in self.mapped_data.cpu_scheduling.assignments}
-            assigned_cpus = {
-                assignment.cpu_id
-                for assignment in self.mapped_data.cpu_frequency.profile_assignments.cpu_assignments
+        # Check Core isolation vs frequency assignments
+        if self.mapped_data.core_isolation and self.mapped_data.core_frequency:
+            scheduled_cores = {a.core_id for a in self.mapped_data.core_isolation.assignments}
+            assigned_cores = {
+                assignment.core_id
+                for assignment in self.mapped_data.core_frequency.profile_assignments.core_assignments
             }
 
-            missing_assignments = scheduled_cpus - assigned_cpus
+            missing_assignments = scheduled_cores - assigned_cores
             if missing_assignments:
                 issues.append(
-                    f"CPUs scheduled but not assigned to frequency profile: {missing_assignments}"
+                    f"Cores scheduled but not assigned to frequency profile: {missing_assignments}"
                 )
 
-            extra_assignments = assigned_cpus - scheduled_cpus
+            extra_assignments = assigned_cores - scheduled_cores
             if extra_assignments:
-                issues.append(f"CPUs assigned to frequency profile but not scheduled: {extra_assignments}")
+                issues.append(f"Cores assigned to frequency profile but not scheduled: {extra_assignments}")
 
         # Check profile references are valid
-        if self.mapped_data.cpu_frequency:
-            valid_profiles = set(self.mapped_data.cpu_frequency.frequency_profiles.keys())
+        if self.mapped_data.core_frequency:
+            valid_profiles = set(self.mapped_data.core_frequency.frequency_profiles.keys())
             referenced_profiles = {
                 assignment.profile_ref
-                for assignment in self.mapped_data.cpu_frequency.profile_assignments.cpu_assignments
+                for assignment in self.mapped_data.core_frequency.profile_assignments.core_assignments
             }
             undefined_refs = referenced_profiles - valid_profiles
 
@@ -250,18 +250,18 @@ class TCCConfigDataAPI:
             f"Selected TCC Subsystems: {sorted(self.list_of_subsystem_configured())}",
         ]
 
-        isolated = self.isolated_cpus()
+        isolated = self.isolated_cores()
         if isolated:
-            lines.append(f"Isolated CPUs: {isolated}")
+            lines.append(f"Isolated Cores: {isolated}")
 
         freq_profiles = self.all_frequency_profiles()
         if freq_profiles:
             lines.append(f"Frequency Profiles: {list(freq_profiles.keys())}")
             for profile_id, profile in freq_profiles.items():
-                cpus = self.cpus_for_frequency_profile(profile_id)
+                cores = self.cores_for_frequency_profile(profile_id)
                 lines.append(
                     f"  {profile_id}: {profile.frequency_config.governor} "
-                    f"({profile.frequency_config.min_freq_mhz}-{profile.frequency_config.max_freq_mhz} MHz), CPUs: {cpus}"
+                    f"({profile.frequency_config.min_freq_mhz}-{profile.frequency_config.max_freq_mhz} MHz), Cores: {cores}"
                 )
 
         return "\n".join(lines)
