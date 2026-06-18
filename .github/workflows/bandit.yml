@@ -18,3 +18,6 @@ jobs:
     steps:
       - name: Perform Bandit Analysis
         uses: PyCQA/bandit-action@v1.0.1
+        with:
+          # This tells Bandit to skip the tests directory
+          args: "-r . -x tests"
