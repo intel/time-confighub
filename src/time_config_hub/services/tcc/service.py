@@ -62,9 +62,9 @@ class TCCService(TCCServiceInterface):
             tcc_api = TCCConfigDataAPI(uparser.documents)
 
             # Log profile information
-            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info("================= TCC Configuration Summary =================")
             logger.info(f"{tcc_api.summary()}")
-            logger.info(f"=============================================================")
+            logger.info("=============================================================")
 
             # Validate configuration consistency
             validation_issues = tcc_api.validate_consistency()
@@ -110,9 +110,9 @@ class TCCService(TCCServiceInterface):
             tcc_api = TCCConfigDataAPI(uparser.documents)
 
             # Log profile information
-            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info("================= TCC Configuration Summary =================")
             logger.info(f"{tcc_api.summary()}")
-            logger.info(f"=============================================================")
+            logger.info("=============================================================")
 
             # Validate configuration consistency
             validation_issues = tcc_api.validate_consistency()
