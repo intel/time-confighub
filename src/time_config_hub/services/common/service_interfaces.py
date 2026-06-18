@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Protocol
 
+from time_config_hub.infra.execution_transport import ExecutionTransport
+
 
 class TSNServiceInterface(Protocol):
     """Protocol for TSN service operations."""
@@ -50,3 +52,71 @@ class TCCServiceInterface(Protocol):
 
     def validate(self, config_file: str) -> bool:
         """Validate TCC configuration."""
+
+
+# ======================================================================
+# Workflow service interfaces
+# ======================================================================
+
+class PtpServiceInterface(Protocol):
+    """Protocol for PTP daemon lifecycle operations."""
+
+    def run_ptp_phase(self, transport: ExecutionTransport, role: str | None, dry_run: bool = False) -> list[str]:
+        """Run the full PTP setup phase for the given role (talker or listener)."""
+
+    def start_grandmaster(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start ptp4l in grandmaster mode."""
+
+    def verify_grandmaster_status(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Poll until ptp4l reports MASTER portState."""
+
+    def start_slave(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start ptp4l in slave mode."""
+
+    def verify_slave_lock(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Poll until ptp4l reports SLAVE portState and offset is within threshold."""
+
+    def start_phc2sys(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start phc2sys to synchronise system clock from PHC."""
+
+
+class TestbenchServiceInterface(Protocol):
+    """Protocol for testbench application lifecycle operations."""
+
+    def start_transmitter(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start testbench in transmit mode."""
+
+    def stop_transmitter(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Stop testbench transmitter process."""
+
+    def start_receiver(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start testbench in receive mode."""
+
+    def stop_receiver(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Stop testbench receiver process."""
+
+    def collect_logs(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Retrieve testbench log from the target."""
+
+
+class AIWorkloadServiceInterface(Protocol):
+    """Protocol for AI workload application lifecycle operations."""
+
+    def start(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Start the AI workload."""
+
+    def stop(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Stop the AI workload."""
+
+    def collect_logs(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Retrieve AI workload log from the target."""
+
+
+class InstallerServiceInterface(Protocol):
+    """Protocol for target installation and connectivity operations."""
+
+    def verify_connectivity(self, transport: ExecutionTransport) -> bool:
+        """Check that the target is reachable."""
+
+    def install(self, transport: ExecutionTransport, dry_run: bool = False) -> list[str]:
+        """Install required packages and push configuration files."""

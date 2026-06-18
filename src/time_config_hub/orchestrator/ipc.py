@@ -4,15 +4,20 @@
 """
 Orchestrator IPC Module
 
-This module contains server and client components for orchestration over 
+This module contains server and client components for orchestration over
 a Unix domain socket.
 
 The daemon exposes a streaming socket at /run/tch-orchestrator.sock.
 The CLI connects to it to submit orchestration requests.
 
 Message Protocol (newline-delimited JSON):
-    Client → Server:  OrchestratorConfig as JSON + '\\n'
-    Server → Client:  OrchestratorResult as JSON + '\\n'
+    Client → Server:  ServiceRequest as JSON + '\n'
+    Server → Client:  OrchestratorResult as JSON + '\n'
+
+All requests must carry a ``command`` field (see :class:`~.models.ServiceCommand`).
+Workflow orchestration requests use ``command="orchestrate"`` with an embedded
+``orchestrator_config`` payload.  Direct service commands (apply, status, reset,
+validate) use the corresponding command value without ``orchestrator_config``.
 """
 
 import json
@@ -28,6 +33,9 @@ from .models import (
     DeploymentTopologyType,
     OrchestratorConfig,
     OrchestratorResult,
+    ServiceCommand,
+    ServiceRequest,
+    ServiceType,
     Target,
 )
 from .orchestrator import Orchestrator
@@ -40,6 +48,7 @@ __all__ = [
     "OrchestratorServer",
     "start_orchestrator_server",
     "send_orchestration_request",
+    "send_service_request",
     "SOCKET_PATH",
 ]
 
@@ -74,13 +83,37 @@ def _deserialize_config(data: dict) -> OrchestratorConfig:
         tsn_config=data["tsn_config"],
         stages_to_run=data.get("stages_to_run", []),
         dry_run=data.get("dry_run", False),
+        test_duration=data.get("test_duration"),
+        timeout=data.get("timeout"),
+    )
+
+
+def _deserialize_service_request(data: dict) -> ServiceRequest:
+    """
+    Build a ServiceRequest from a plain dict (JSON payload).
+
+    :param dict data: The input data dictionary parsed from JSON.
+    :return: A ServiceRequest instance.
+    :rtype: ServiceRequest
+    :raises KeyError: If required fields are missing.
+    :raises ValueError: If fields have invalid enum values.
+    """
+    orch_config_data = data.get("orchestrator_config")
+    orch_config = _deserialize_config(orch_config_data) if orch_config_data else None
+    return ServiceRequest(
+        command=ServiceCommand(data["command"]),
+        service_type=ServiceType(data["service_type"]),
+        config_path=data.get("config_path"),
+        interface=data.get("interface"),
+        dry_run=data.get("dry_run", False),
+        orchestrator_config=orch_config,
     )
 
 
 class _OrchestrationHandler(socketserver.StreamRequestHandler):
     """
     Handle a single orchestration request.
-    
+
     This handler reads a JSON payload from the client, deserializes it into an
     OrchestratorConfig, runs the orchestration workflow, and sends back an
     OrchestratorResult as JSON.
@@ -94,7 +127,26 @@ class _OrchestrationHandler(socketserver.StreamRequestHandler):
             if not raw:
                 return
             payload = json.loads(raw.decode("utf-8"))
-            config = _deserialize_config(payload)
+
+            if "command" not in payload:
+                raise ValueError(
+                    "Payload missing required 'command' field. "
+                    "All requests must be sent as a ServiceRequest. "
+                    "Use send_service_request() on the client side."
+                )
+
+            request = _deserialize_service_request(payload)
+            logger.info(
+                "Received service request: command=%s, service=%s",
+                request.command.value,
+                request.service_type.value,
+            )
+            result = Orchestrator().execute(request)
+
+            response = json.dumps(asdict(result))
+            self.wfile.write((response + "\n").encode("utf-8"))
+            self.wfile.flush()
+
         except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
             logger.warning("Bad request from client: %s", exc)
             error_result = OrchestratorResult(
@@ -107,23 +159,9 @@ class _OrchestrationHandler(socketserver.StreamRequestHandler):
                 self.wfile.flush()
             except OSError:
                 pass
-            return
-
-        try:
-            logger.info(
-                "Received orchestration request: topology=%s, targets=%d",
-                config.topology_type.value,
-                len(config.targets),
-            )
-
-            result = Orchestrator(config=config).run()
-
-            response = json.dumps(asdict(result))
-            self.wfile.write((response + "\n").encode("utf-8"))
-            self.wfile.flush()
 
         except Exception as exc:
-            logger.exception("Error during orchestration")
+            logger.exception("Error during request handling")
             error_result = OrchestratorResult(
                 success=False, logs=[], errors=[str(exc)]
             )
@@ -181,7 +219,7 @@ def start_orchestrator_server(socket_path: str = SOCKET_PATH) -> OrchestratorSer
         os.umask(old_umask)
 
     # Start server in a daemon thread so it doesn't block the main service loop
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True, name="OrchestratorServerThread")
     thread.start()
 
     logger.info("Orchestrator server started on %s", socket_path)
@@ -197,9 +235,11 @@ def send_orchestration_request(
     socket_path: str = SOCKET_PATH,
     timeout: float = CLIENT_TIMEOUT,
 ) -> OrchestratorResult:
-    """Client-side helper: send config to the daemon and return result.
+    """Client-side helper: send an orchestration workflow request to the daemon.
 
-    Used by the CLI ``tch orchestrate`` command.
+    Wraps *config* in a :class:`~.models.ServiceRequest` with
+    ``command=ORCHESTRATE`` and delegates to :func:`send_service_request`.
+    This is the standard entry point for the CLI ``tch orchestrate`` command.
 
     :param OrchestratorConfig config: The orchestration configuration to send.
     :param str socket_path: Path for the Unix domain socket.
@@ -208,8 +248,38 @@ def send_orchestration_request(
     :rtype: OrchestratorResult
     :raises socket.timeout: If the daemon does not respond within *timeout* seconds.
     """
-    payload = asdict(config)
-    payload["topology_type"] = config.topology_type.value  # serialize enum
+    request = ServiceRequest(
+        command=ServiceCommand.ORCHESTRATE,
+        service_type=ServiceType.BOTH,
+        orchestrator_config=config,
+    )
+    return send_service_request(request, socket_path=socket_path, timeout=timeout)
+
+
+def send_service_request(
+    request: ServiceRequest,
+    socket_path: str = SOCKET_PATH,
+    timeout: float = CLIENT_TIMEOUT,
+) -> OrchestratorResult:
+    """Client-side helper: send a ServiceRequest to the daemon and return result.
+
+    Serializes the :class:`~.models.ServiceRequest` as JSON and forwards it
+    to the orchestrator daemon over a Unix domain socket.  The daemon
+    dispatches the command through :meth:`Orchestrator.execute` and returns
+    an :class:`~.models.OrchestratorResult`.
+
+    :param ServiceRequest request: The service command to send.
+    :param str socket_path: Path to the Unix domain socket.
+    :param float timeout: Socket timeout in seconds.
+    :return: The result returned by the daemon.
+    :rtype: OrchestratorResult
+    :raises socket.timeout: If the daemon does not respond within *timeout* seconds.
+    """
+    payload = asdict(request)
+    payload["command"] = request.command.value
+    payload["service_type"] = request.service_type.value
+    if request.orchestrator_config is not None:
+        payload["orchestrator_config"]["topology_type"] = request.orchestrator_config.topology_type.value
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(timeout)

@@ -63,7 +63,10 @@ def setup_logging(app_config: dict):
         console_handler.setLevel("INFO")
     else:
         console_handler.setLevel("ERROR")
-    console_formatter = logging.Formatter("%(message)s")
+    console_formatter = logging.Formatter(
+        "%(asctime)s [%(threadName)s] %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     console_handler.setFormatter(console_formatter)
     log_handler.append(console_handler)
 

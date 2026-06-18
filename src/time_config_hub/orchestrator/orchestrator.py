@@ -27,146 +27,41 @@ in a single request.
 The orchestrator runs within the existing TCH daemon (tch.service) as a
 socket listener thread.  The CLI sends OrchestratorConfig via Unix socket,
 the daemon runs the workflow, and returns OrchestratorResult.
+
+Related modules:
+- worker.py         — _TargetWorker: per-target thread and stage pipeline
+- target_manager.py — resolve_targets(), register_targets(): topology and SSH setup
+- ipc.py            — Unix socket server and client helpers
 """
 
 import logging
 import threading
-import time
-from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from .models import (
     DeploymentTopologyType,
     OrchestratorConfig,
     OrchestratorResult,
+    ServiceCommand,
+    ServiceRequest,
+    ServiceType,
+    StageContext,
     StageHandler,
     StageResult,
     Target,
 )
 
-from .single_target import get_steps as get_single_target_steps
 from .multi_target import get_steps as get_multi_target_steps
+from .worker import TargetWorker, timestamp, set_role_log_context
+from .target_manager import register_targets, resolve_targets
+from .service_factory import ServiceFactory
 
 logger = logging.getLogger("orchestrator")
-
-def _now_ms() -> int:
-    return int(time.monotonic() * 1000)
-
-def _timestamp() -> str:
-    """Return a UTC timestamp string in HH:MM:SS.mmm format."""
-    now = datetime.now(timezone.utc)
-    return now.strftime("%H:%M:%S") + f".{now.microsecond // 1000:03d}"
+logger.setLevel(logging.DEBUG)  # Orchestrator logs are always DEBUG level for maximum visibility
 
 # ======================================================================
-# Worker — runs stage pipeline for a single target on a dedicated thread
+# Orchestrator — coordinates topology, workers, and result aggregation
 # ======================================================================
-
-class _TargetWorker:
-    """
-    Runs the orchestration stage pipeline for a single target.
-
-    Each worker executes the requested stages sequentially and collects
-    per-stage results.  Thread-safe: results are written only by the
-    owning thread and read after ``join()``.
-    """
-
-    def __init__(self, target: Target, stages: list[str], dry_run: bool):
-        self.target = target
-        self.stages = stages
-        self.dry_run = dry_run
-        self.results: dict[str, StageResult] = {}
-        self.success = True
-        self.timed_out = False
-        self.cancelled = False
-        self._cancel_event = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._logs: list[str] = []
-        self._errors: list[str] = []
-
-    # -- lifecycle -----------------------------------------------------
-
-    def start(self):
-        self._thread = threading.Thread(
-            target=self._run_pipeline,
-            name=f"worker-{self.target.id}",
-            daemon=True,
-        )
-        self._thread.start()
-
-    def join(self, timeout: int | None = None):
-        if self._thread is not None:
-            self._thread.join(timeout=timeout)
-            if self._thread.is_alive():
-                self.timed_out = True
-                self.success = False
-                self.cancel()
-                msg = f"[{_timestamp()}] [{self.target.id}] Worker timed out after {timeout}s"
-                self._errors.append(msg)
-                logger.error(msg)
-
-    def cancel(self):
-        """Signal the worker to stop after the current stage completes."""
-        self._cancel_event.set()
-
-    @property
-    def is_alive(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
-
-    # -- stage pipeline (runs inside worker thread) --------------------
-
-    def _run_pipeline(self):
-        logger.info("[%s] Starting stage pipeline", self.target.id)
-        for stage_name in self.stages:
-            if self._cancel_event.is_set():
-                self.cancelled = True
-                self.success = False
-                msg = f"[{_timestamp()}] [{self.target.id}] Pipeline cancelled before stage '{stage_name}'"
-                self._logs.append(msg)
-                logger.info(msg)
-                self._skip_stage(stage_name, reason="Cancelled")
-                continue
-            if not self.success:
-                self._skip_stage(stage_name)
-                continue
-            self._execute_stage(stage_name)
-        logger.info("[%s] Pipeline finished (success=%s)", self.target.id, self.success)
-
-    def _execute_stage(self, stage_name: str):
-        logger.info("[%s] Stage '%s' → RUNNING", self.target.id, stage_name)
-        start_ms = _now_ms()
-        try:
-            steps = get_single_target_steps(stage_name)
-            _, _, handler = steps[0]
-            output = handler(self.target, self.dry_run)
-            duration = _now_ms() - start_ms
-            self.results[stage_name] = StageResult(
-                success=True,
-                output=output,
-                duration_ms=duration,
-                target_id=self.target.id,
-            )
-            self._logs.append(f"[{_timestamp()}] [{self.target.id}] Stage '{stage_name}' completed in {duration} ms")
-            logger.info("[%s] Stage '%s' → SUCCESS (%d ms)", self.target.id, stage_name, duration)
-        except Exception as exc:
-            duration = _now_ms() - start_ms
-            self.results[stage_name] = StageResult(
-                success=False,
-                output=[str(exc)],
-                duration_ms=duration,
-                target_id=self.target.id,
-            )
-            self.success = False
-            error_msg = f"[{_timestamp()}] [{self.target.id}] Stage '{stage_name}' failed: {exc}"
-            self._errors.append(error_msg)
-            logger.error("%s", error_msg)
-
-    def _skip_stage(self, stage_name: str, reason: str = "Prior failure"):
-        logger.info("[%s] Stage '%s' → SKIPPED (%s)", self.target.id, stage_name, reason)
-        self.results[stage_name] = StageResult(
-            success=False,
-            output=[f"Skipped: {reason}"],
-            target_id=self.target.id,
-        )
-
 
 # ======================================================================
 # Orchestrator — coordinates topology, workers, and result aggregation
@@ -177,18 +72,76 @@ class Orchestrator:
     Coordinates deployment strategies, stage execution, and progress
     reporting for TCH workflows.
 
-    Usage::
+    The Orchestrator owns and self-initialises its :class:`TimeHubService`
+    backend from *app_config*.  Callers (CLI, GUI, tests) must not
+    construct or inject a service directly — the backend is internal.
 
-        result = Orchestrator(config).run()
+    Usage (normal)::
+
+        orch = Orchestrator(app_config=app_config)
+        result = orch.execute(ServiceRequest(...))
+
+    Usage (workflow pipeline via IPC daemon)::
+
+        result = Orchestrator(config=orch_config, app_config=app_config).run()
     """
 
-    def __init__(self, config: OrchestratorConfig):
+    def __init__(
+        self,
+        app_config: Optional[Dict[str, Any]] = None,
+        config: Optional[OrchestratorConfig] = None,
+    ):
+        """
+        :param app_config: Application configuration dict used to
+            self-initialise the internal :class:`TimeHubService`.  When
+            omitted the configuration is loaded from the default paths.
+        :param config: Optional :class:`OrchestratorConfig` for workflow
+            pipeline runs (``run()`` / IPC daemon path).
+        """
+        from .time_hub_service import TimeHubService  # local import avoids circular
+
         self.config = config
         self._logs: list[str] = []
         self._errors: list[str] = []
+        self._stage_results: dict[str, dict[str, StageResult]] = {}
+
+        if app_config is not None:
+            self._hub_service = TimeHubService(app_config)
+            self._service_factory = ServiceFactory(app_config)
+        else:
+            self._hub_service = TimeHubService.from_default_config()
+            self._service_factory = ServiceFactory(self._hub_service.app_config)
+
+    # ------------------------------------------------------------------
+    # Internal service access — NOT part of the public API
+    # ------------------------------------------------------------------
+
+    @property
+    def service_manager(self):
+        """Expose the underlying :class:`ServiceManager` for daemon lifecycle
+        commands (start, stop, restart, status).  This is the only sanctioned
+        path for CLI daemon commands to reach system-level service control.
+
+        :rtype: ServiceManager
+        """
+        return self._hub_service.service_manager
 
     def run(self) -> OrchestratorResult:
-        """Execute the deployment workflow and return an aggregated result."""
+        """Execute the deployment workflow and return an aggregated result.
+
+        Called internally by :meth:`execute` when the command is
+        ``ORCHESTRATE``, and directly by the IPC daemon path when a legacy
+        ``OrchestratorConfig``-only payload is received.  New callers should
+        use :meth:`execute` with a :class:`~.models.ServiceRequest` so all
+        routing lives in one place; ``run()`` is kept as the shared
+        implementation entry point.
+        """
+        if self.config is None:
+            return OrchestratorResult(
+                success=False,
+                logs=[],
+                errors=["run() called without a config — use execute(ServiceRequest) or pass config= at construction"],
+            )
         try:
             self._log(f"Starting orchestration: topology={self.config.topology_type.value}, "
                        f"targets={len(self.config.targets)}, "
@@ -205,6 +158,7 @@ class Orchestrator:
                 success=overall_success,
                 logs=self._logs,
                 errors=self._errors,
+                stage_results=self._stage_results or None,
             )
 
         except Exception as exc:
@@ -214,77 +168,15 @@ class Orchestrator:
                 success=False,
                 logs=self._logs,
                 errors=self._errors,
+                stage_results=self._stage_results or None,
             )
 
     # -- internal helpers ----------------------------------------------
 
     def _log(self, message: str):
-        stamped = f"[{_timestamp()}] {message}"
+        stamped = f"[{timestamp()}] {message}"
         logger.info("%s", message)
         self._logs.append(stamped)
-
-    def _resolve_targets(self) -> list[Target]:
-        """
-        Return the list of targets with roles assigned based on topology.
-
-        SINGLE_LOCAL → 1 target  (role=None)
-        B2B          → 2 targets (1 talker + 1 listener)
-        MULTI_DUT    → N targets (1 talker + N-1 listeners)
-        """
-        topo = self.config.topology_type
-        targets = list(self.config.targets)          # shallow copy to avoid mutating input
-
-        if topo == DeploymentTopologyType.SINGLE_LOCAL:
-            if not targets:
-                raise ValueError("SINGLE_LOCAL topology requires exactly one target")
-            targets[0].role = None
-            return targets[:1]
-
-        if topo == DeploymentTopologyType.B2B:
-            if len(targets) < 2:
-                raise ValueError("B2B topology requires at least two targets (Talker and Listener)")
-            targets[0].role = "talker"
-            targets[1].role = "listener"
-            return targets[:2]
-
-        # MULTI_DUT — first target is talker, rest are listeners
-        if len(targets) < 2:
-            raise ValueError("MULTI_DUT topology requires at least two targets (1 Talker + N Listeners)")
-        targets[0].role = "talker"
-        for t in targets[1:]:
-            t.role = "listener"
-        return targets
-
-    # -- system_controller registration --------------------------------
-
-    def _register_targets(self, targets: list[Target]) -> None:
-        """Register remote targets with system_controller for SSH access.
-
-        Skips local targets (ssh_user is None).  Raises on failure so
-        the orchestration aborts before any stage runs.
-        """
-        for target in targets:
-            # Local targets do not require registration
-            if target.sc_target_id is None:
-                self._log(f"Target '{target.id}' is local — skipping registration")
-                continue
-
-            # Check if already registered to avoid unnecessary SSH attempts
-            if sc.is_registered(target.sc_target_id):
-                self._log(f"Target '{target.sc_target_id}' already registered")
-                continue
-
-            # Register with system_controller for remote command execution
-            result = sc.register(
-                target.sc_target_id,
-                password=target.ssh_password,
-                port=target.ssh_port,
-            )
-            if result["status_code"] != TchStatusCode.SUCCESS:
-                raise RuntimeError(
-                    f"SSH registration failed for '{target.sc_target_id}': {result['error']}"
-                )
-            self._log(f"Registered target '{target.sc_target_id}'")
 
     # -- threaded workflow execution -----------------------------------
 
@@ -298,8 +190,9 @@ class Orchestrator:
         targets — all targets must complete stage N before stage N+1
         begins.
         """
-        targets = self._resolve_targets()
-        self._register_targets(targets)
+        assert self.config is not None, "_execute_workflow requires config"
+        targets = resolve_targets(self.config)
+        register_targets(targets, log=self._log)
 
         is_multi_dut = self.config.topology_type in (
             DeploymentTopologyType.B2B,
@@ -309,10 +202,13 @@ class Orchestrator:
         if not is_multi_dut:
             # SINGLE_LOCAL — one worker, all stages at once
             self._log(f"Single target mode: stages={self.config.stages_to_run}")
-            worker = _TargetWorker(
+            worker = TargetWorker(
                 target=targets[0],
                 stages=self.config.stages_to_run,
                 dry_run=self.config.dry_run,
+                service_factory=self._service_factory,
+                tcc_config_path=self.config.tcc_config,
+                tsn_config_path=self.config.tsn_config,
             )
             worker.start()
             worker.join(timeout=self.config.timeout)
@@ -322,6 +218,7 @@ class Orchestrator:
         # Multi-DUT — execute one stage at a time, step by step
         self._log(f"Multi-DUT mode: synchronizing stages across {len(targets)} target(s)")
 
+        self._log(f"Executing stages in order: {', '.join(self.config.stages_to_run)}")
         for stage_name in self.config.stages_to_run:
             target_ids = [f"{t.id}({t.role})" for t in targets]
             steps = get_multi_target_steps(stage_name)
@@ -345,57 +242,128 @@ class Orchestrator:
         then waits for all to complete before proceeding to the next step.
         Returns True if all steps succeeded.
         """
+        assert self.config is not None, "_execute_stage_steps requires config"
+        _config = self.config  # captured so closures see a non-Optional reference
+        _BANNER = "─" * 60
         for step_name, roles, action in steps:
             step_targets = [t for t in targets if t.role in roles]
             if not step_targets:
                 self._log(f"  Step '{step_name}' — no matching targets, skipping")
                 continue
 
-            self._log(f"  Step '{step_name}' → {[t.id for t in step_targets]}")
+            role_labels = "/".join(sorted(roles))
+            self._log(f"{_BANNER}")
+            self._log(f"STEP  {stage_name} › {step_name}  [{role_labels}]  targets={[t.id for t in step_targets]}")
+            self._log(f"{_BANNER}")
 
-            # Run this step on matching targets in parallel
+            # Run this step on matching targets in parallel.
+            # A Barrier is created when more than one target participates so that
+            # handlers (e.g. validate_timesync) can rendezvous mid-step via ctx.barrier.
             errors: list[str] = []
             lock = threading.Lock()
+            n_targets = len(step_targets)
+            barrier = threading.Barrier(n_targets) if n_targets > 1 else None
+            if barrier is not None:
+                logger.info(
+                    "[barrier] created  step='%s'  parties=%d  targets=%s",
+                    step_name,
+                    n_targets,
+                    [t.id for t in step_targets],
+                )
 
-            def _run_step(target: Target, _action: StageHandler = action) -> None:
+            def _run_step(
+                target: Target,
+                _action: StageHandler = action,
+                _barrier: threading.Barrier | None = barrier,
+            ) -> None:
+                set_role_log_context(target)
+                tname = threading.current_thread().name
+                logger.info("[thread] started  thread='%s'  step='%s'", tname, step_name)
                 try:
-                    output = _action(target, self.config.dry_run)
+                    ctx = StageContext(
+                        target=target,
+                        dry_run=_config.dry_run,
+                        hub_service=self._service_factory.build(target),
+                        tcc_config_path=_config.tcc_config,
+                        tsn_config_path=_config.tsn_config,
+                        barrier=_barrier,
+                    )
+                    output = _action(ctx)
                     self._log(f"  Step '{step_name}' [{target.id}] → done")
                     logger.debug("Step output [%s]: %s", target.id, output)
+                except threading.BrokenBarrierError:
+                    # Another thread already recorded a failure and broke the
+                    # barrier; add a contextual note but avoid double-reporting.
+                    logger.debug(
+                        "[barrier] broken-error caught  thread='%s'  step='%s'",
+                        threading.current_thread().name,
+                        step_name,
+                    )
+                    with lock:
+                        errors.append(
+                            f"[{target.id}] Step '{step_name}' aborted: barrier broken by a peer"
+                        )
                 except Exception as exc:
+                    if _barrier is not None:
+                        logger.debug(
+                            "[barrier] aborting  thread='%s'  step='%s'  reason=%r",
+                            threading.current_thread().name,
+                            step_name,
+                            str(exc),
+                        )
+                        _barrier.abort()  # unblock any peer waiting at the barrier
                     with lock:
                         errors.append(f"[{target.id}] Step '{step_name}' failed: {exc}")
 
-            threads: list[threading.Thread] = []
+            threads: list[tuple[threading.Thread, Target]] = []
             for target in step_targets:
+                role = target.role or "local"
                 th = threading.Thread(
                     target=_run_step,
                     kwargs={"target": target},
-                    name=f"step-{step_name}-{target.id}",
+                    name=f"{role}/{target.id}",
                     daemon=True,
                 )
-                threads.append(th)
+                threads.append((th, target))
                 th.start()
+                logger.info("[thread] dispatched  thread='%s'  step='%s'", th.name, step_name)
 
-            for th in threads:
-                th.join(timeout=self.config.timeout)
+            for th, target in threads:
+                logger.info(
+                    "[thread] joining  thread='%s'  step='%s'  timeout=%ss",
+                    th.name,
+                    step_name,
+                    _config.timeout,
+                )
+                th.join(timeout=_config.timeout)
+                if th.is_alive():
+                    logger.debug("[thread] timed out  thread='%s'  step='%s'", th.name, step_name)
+                    with lock:
+                        errors.append(
+                            f"[{target.id}] Step '{step_name}' timed out after {_config.timeout}s"
+                        )
+                else:
+                    logger.info("[thread] joined  thread='%s'  step='%s'", th.name, step_name)
 
             if errors:
                 for err in errors:
-                    self._errors.append(f"[{_timestamp()}] {err}")
+                    self._errors.append(f"[{timestamp()}] {err}")
                     logger.error(err)
                 return False
 
         self._log(f"Stage '{stage_name}' → all steps completed")
+        self._log("═" * 60)
         return True
 
-    def _aggregate_results(self, workers: list[_TargetWorker]):
-        """Merge per-worker logs, errors and results into orchestrator-level state."""
+    def _aggregate_results(self, workers: list[TargetWorker]):
+        """Merge per-worker logs, errors, and stage results into orchestrator-level state."""
         for worker in workers:
-            self._logs.extend(worker._logs)
-            self._errors.extend(worker._errors)
-            logger.info("Worker logs for target '%s': %s", worker.target.id, worker._logs)
-            logger.info("Worker errors for target '%s': %s", worker.target.id, worker._errors)
+            self._logs.extend(worker.logs)
+            self._errors.extend(worker.errors)
+            logger.info("Worker logs for target '%s': %s", worker.target.id, worker.logs)
+            logger.info("Worker errors for target '%s': %s", worker.target.id, worker.errors)
+            if worker.results:
+                self._stage_results[worker.target.id] = worker.results
             stages_label = ", ".join(worker.stages)
             if worker.timed_out:
                 self._log(f"Target '{worker.target.id}' timed out during stage(s): {stages_label}")
@@ -405,3 +373,132 @@ class Orchestrator:
                 self._log(f"Target '{worker.target.id}' failed stage(s): {stages_label}")
             else:
                 self._log(f"Target '{worker.target.id}' completed stage(s): {stages_label}")
+
+    # ------------------------------------------------------------------
+    # Service-based entry point (CLI → Orchestrator → TimeHubService)
+    # ------------------------------------------------------------------
+
+    def execute(self, request: ServiceRequest) -> OrchestratorResult:
+        """Single entry point for all CLI-originated service commands.
+
+        Routes :attr:`~.models.ServiceCommand.ORCHESTRATE` requests through
+        the full multi-stage workflow pipeline (:meth:`run`).  All other
+        commands (apply, status, reset, validate) are dispatched directly to
+        the bound :class:`~.time_hub_service.TimeHubService`.
+
+        :param ServiceRequest request: The service command to execute.
+        :return: Aggregated result with success flag, logs, errors, and
+            optional *data* payload for status/query commands.
+        :rtype: OrchestratorResult
+        """
+        self._logs = []
+        self._errors = []
+        self._stage_results = {}
+
+        if request.command == ServiceCommand.ORCHESTRATE:
+            if request.orchestrator_config is None:
+                return OrchestratorResult(
+                    success=False,
+                    logs=[],
+                    errors=["ORCHESTRATE command requires orchestrator_config to be set on the ServiceRequest"],
+                )
+            self.config = request.orchestrator_config
+            return self.run()
+
+        return self._dispatch_service_command(request)
+
+    def _dispatch_service_command(self, request: ServiceRequest) -> OrchestratorResult:
+        """Dispatch a non-workflow command to the bound TimeHubService.
+
+        :param ServiceRequest request: The command to dispatch.
+        :return: Result with success flag and optional *data* for status/query
+            commands.
+        :rtype: OrchestratorResult
+        """
+        hub = self._hub_service
+        svc_label = request.service_type.value
+        data = None
+
+        self._log(f"[Orchestrator]Received service command: {svc_label}/{request.command.value}")
+        try:
+            if request.service_type == ServiceType.TSN:
+                if request.command == ServiceCommand.APPLY:
+                    self._log(f"[tsn] apply: {request.config_path} (dry_run={request.dry_run})")
+                    hub.apply_config(request.config_path or "", dry_run=request.dry_run)
+                elif request.command == ServiceCommand.STATUS:
+                    self._log(f"[tsn] status: interface={request.interface}")
+                    data = hub.get_status(interface=request.interface or "")
+                elif request.command == ServiceCommand.RESET:
+                    self._log(f"[tsn] reset: interface={request.interface}")
+                    hub.reset_config(interface=request.interface or "")
+                elif request.command == ServiceCommand.VALIDATE:
+                    self._log(f"[tsn] validate: {request.config_path}")
+                    hub.validate_config(request.config_path or "")
+
+            elif request.service_type == ServiceType.TCC:
+                if request.command == ServiceCommand.APPLY:
+                    self._log(f"[tcc] apply: {request.config_path} (dry_run={request.dry_run})")
+                    hub.apply_tcc_config(request.config_path or "", dry_run=request.dry_run)
+                elif request.command == ServiceCommand.STATUS:
+                    self._log("[tcc] status")
+                    data = hub.get_tcc_status()
+                elif request.command == ServiceCommand.RESET:
+                    self._log("[tcc] reset")
+                    hub.reset_tcc_config()
+                elif request.command == ServiceCommand.VALIDATE:
+                    self._log(f"[tcc] validate: {request.config_path}")
+                    hub.validate_tcc_config(request.config_path or "")
+
+            # -- KPI service domains (implementation delegated to future service modules) --
+
+            elif request.service_type == ServiceType.RTC:
+                # TODO: Implement RTC testbench application configuration service
+                #       Route to a dedicated RTCService (apply/status/reset/validate)
+                raise NotImplementedError(
+                    f"ServiceType.RTC command '{request.command.value}' is not yet implemented"
+                )
+
+            elif request.service_type == ServiceType.TIMESYNC:
+                # TODO: Implement PTP timesync service
+                #       Route to PtpService (start/stop/status)
+                raise NotImplementedError(
+                    f"ServiceType.TIMESYNC command '{request.command.value}' is not yet implemented"
+                )
+
+            elif request.service_type == ServiceType.WORKLOAD:
+                # TODO: Implement workload service dispatcher
+                #       Route to AIWorkloadService / TestbenchService based on role (interface field)
+                raise NotImplementedError(
+                    f"ServiceType.WORKLOAD command '{request.command.value}' is not yet implemented"
+                )
+
+            elif request.service_type == ServiceType.TEST:
+                # TODO: Implement test lifecycle service
+                #       Route to a TestService or query orchestration run state
+                raise NotImplementedError(
+                    f"ServiceType.TEST command '{request.command.value}' is not yet implemented"
+                )
+
+            elif request.service_type == ServiceType.REPORT:
+                # TODO: Implement report collection and display service
+                #       Route to a ReportService (collect logs, aggregate metrics, show results)
+                raise NotImplementedError(
+                    f"ServiceType.REPORT command '{request.command.value}' is not yet implemented"
+                )
+
+            self._log(f"[Orchestrator][{svc_label}] {request.command.value} completed successfully")
+            return OrchestratorResult(
+                success=True,
+                logs=list(self._logs),
+                errors=[],
+                data=data,
+            )
+
+        except Exception as exc:
+            logger.exception("Service command [%s/%s] failed", svc_label, request.command.value)
+            self._errors.append(str(exc))
+            return OrchestratorResult(
+                success=False,
+                logs=list(self._logs),
+                errors=list(self._errors),
+            )

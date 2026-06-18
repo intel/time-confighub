@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Time Config TCC Service API Implementation 
+Time Config TCC Service API Implementation
 
-This service class provides methods to apply, validate, reset and 
-check the status of Intel TCC configurations. 
+This service class provides methods to apply, validate, reset and
+check the status of Intel TCC configurations.
 
-It uses the ConfigParserService for parsing configuration files and 
-the TCCStateStore for tracking applied configurations and status. 
-The TCCService implements the TCCServiceInterface protocol, allowing 
+It uses the ConfigParserService for parsing configuration files and
+the TCCStateStore for tracking applied configurations and status.
+The TCCService implements the TCCServiceInterface protocol, allowing
 it to be used interchangeably with other implementations if needed.
 
 """
@@ -50,22 +50,22 @@ class TCCService(TCCServiceInterface):
         """
         try:
             logger.info(f"Applying TCC configuration from {config_file}")
-            
+
             # Parse configuration file
             uparser = self._parser.parse_config(config_file)
             raw_docs = uparser.documents
-            
+
             # Log raw parsed documents for debugging
             logger.debug(f"Parsed configuration documents: {raw_docs}")
 
             # Translate raw documents to TCC specific data model
             tcc_api = TCCConfigDataAPI(uparser.documents)
-            
+
             # Log profile information
-            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info("================= TCC Configuration Summary =================")
             logger.info(f"{tcc_api.summary()}")
-            logger.info(f"=============================================================")
-            
+            logger.info("=============================================================")
+
             # Validate configuration consistency
             validation_issues = tcc_api.validate_consistency()
             if validation_issues:
@@ -83,7 +83,7 @@ class TCCService(TCCServiceInterface):
         except ConfigParseError as exc:
             logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
             raise TCCConfigError("TCC configuration file is invalid") from exc
-            
+
         except Exception as exc:
             logger.exception("Failed to apply TCC configuration")
             raise TCCConfigError("Failed to apply TCC configuration") from exc
@@ -101,18 +101,18 @@ class TCCService(TCCServiceInterface):
             # Parse configuration file
             uparser = self._parser.parse_config(config_file)
             raw_docs = uparser.documents
-            
+
             # Log raw parsed documents for debugging
             logger.debug(f"Parsed configuration documents: {raw_docs}")
 
             # Translate raw documents to TCC specific data model
             tcc_api = TCCConfigDataAPI(uparser.documents)
-            
+
             # Log profile information
-            logger.info(f"================= TCC Configuration Summary =================")
+            logger.info("================= TCC Configuration Summary =================")
             logger.info(f"{tcc_api.summary()}")
-            logger.info(f"=============================================================")
-            
+            logger.info("=============================================================")
+
             # Validate configuration consistency
             validation_issues = tcc_api.validate_consistency()
             if validation_issues:
@@ -121,11 +121,11 @@ class TCCService(TCCServiceInterface):
 
             logger.info(f"TCC configuration file {config_file} is valid.")
             return True
-        
+
         except ConfigParseError as exc:
             logger.error(f"TCC configuration file {config_file} is invalid: {exc}")
             return False
-        
+
         except Exception:
             logger.exception(f"Unexpected error validating TCC configuration: {config_file}")
             return False

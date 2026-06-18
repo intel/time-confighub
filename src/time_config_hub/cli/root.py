@@ -30,15 +30,18 @@ import yaml
 
 from .. import __version__
 from time_config_hub.config.config_reader import load_app_config
-from time_config_hub.orchestrator.time_hub_service import TimeHubService
+from time_config_hub.orchestrator.orchestrator import Orchestrator
 from time_config_hub.exceptions import TCCConfigError, TSNConfigError
 from time_config_hub.cli.exit_codes import TchExitCode
 from time_config_hub.config.logging import setup_logging
 
 from time_config_hub.orchestrator.models import (
         DeploymentTopologyType,
-        ORCHESTRATION_STAGES,
+        WORKFLOW_STAGES,
         OrchestratorConfig,
+        ServiceCommand,
+        ServiceRequest,
+        ServiceType,
         Target,
 )
 
@@ -71,8 +74,8 @@ def cli():
 
 
 #===============================================================================
-# Commands for TCH Daemon Management 
-# Implemented as a subgroup under the main CLI (tch daemon <command>) 
+# Commands for TCH Daemon Management
+# Implemented as a subgroup under the main CLI (tch daemon <command>)
 #===============================================================================
 
 @cli.command()
@@ -94,8 +97,8 @@ def daemon_status(ctx):
     result = False
     try:
         # Check systemd service status
-        config_hub = TimeHubService(app_config)
-        service_status = config_hub.service_manager.get_service_status()
+        orch = Orchestrator(app_config=app_config)
+        service_status = orch.service_manager.get_service_status()
 
         if service_status == "active":
             status_msg = "✓ Service status: active"
@@ -150,17 +153,17 @@ def daemon_start(ctx):
     outcome_message = None
 
     try:
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
         # Avoid restarting if already running
-        service_status = config_hub.service_manager.get_service_status()
+        service_status = orch.service_manager.get_service_status()
         if service_status == "active":
             outcome_message = "✓ Daemon is already running"
             result = True
             exit_code = TchExitCode.SUCCESS
             return
 
-        config_hub.service_manager.start_service()
+        orch.service_manager.start_service()
         outcome_message = "✓ Daemon started successfully"
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -198,16 +201,16 @@ def daemon_stop(ctx):
     result = False
     outcome_message = None
     try:
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
-        service_status = config_hub.service_manager.get_service_status()
+        service_status = orch.service_manager.get_service_status()
         if service_status != "active":
             outcome_message = "✓ Daemon is not running"
             result = True
             exit_code = TchExitCode.SUCCESS
             return
 
-        config_hub.service_manager.stop_service()
+        orch.service_manager.stop_service()
         outcome_message = "✓ Daemon stopped successfully"
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -244,8 +247,8 @@ def daemon_restart(ctx):
 
     result = False
     try:
-        config_hub = TimeHubService(app_config)
-        config_hub.service_manager.restart_service()
+        orch = Orchestrator(app_config=app_config)
+        orch.service_manager.restart_service()
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -265,7 +268,7 @@ def daemon_restart(ctx):
 
 #===============================================================================
 # TCH Configuration Commands for TSN Domain
-# Implemented as a subgroup under the main CLI (tch tsn <command>) 
+# Implemented as a subgroup under the main CLI (tch tsn <command>)
 #===============================================================================
 
 @cli.group()
@@ -295,11 +298,10 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
     logger.info(f"Applying configuration from file: {config_file}")
     app_config = ctx.obj.get("app_config")
 
-    result = False
+    result_ok = False
 
     try:
-        # ConfigDirectory from config file points to TSN traffic config directory
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
         if interface:
             click.echo(f"Target interface: {interface}")
@@ -307,8 +309,16 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
         if dry_run:
             click.echo("DRY RUN MODE - No changes will be applied")
 
-        config_hub.apply_config(config_file, dry_run=dry_run)
-        result = True
+        req = ServiceRequest(
+            command=ServiceCommand.APPLY,
+            service_type=ServiceType.TSN,
+            config_path=config_file,
+            dry_run=dry_run,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TSNConfigError(svc_result.errors[0] if svc_result.errors else "Apply failed")
+        result_ok = True
         exit_code = TchExitCode.SUCCESS
 
     except TSNConfigError as e:
@@ -322,7 +332,7 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
         exit_code = TchExitCode.UNEXPECTED_ERROR
 
     finally:
-        if result:
+        if result_ok:
             click.echo("✓ Configuration applied successfully")
             sys.exit(exit_code)
         else:
@@ -357,11 +367,18 @@ def status(ctx, interface: str, output_format: str):
     result = False
     try:
         app_config = ctx.obj.get("app_config")
+        orch = Orchestrator(app_config=app_config)
 
-        # ConfigDirectory from config file points to TSN traffic config directory
-        config_hub = TimeHubService(app_config)
+        req = ServiceRequest(
+            command=ServiceCommand.STATUS,
+            service_type=ServiceType.TSN,
+            interface=interface,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TSNConfigError(svc_result.errors[0] if svc_result.errors else "Status failed")
 
-        status_info = config_hub.get_status(interface=interface)
+        status_info = svc_result.data or {}
 
         if output_format == "json":
             click.echo(json.dumps(status_info, indent=2))
@@ -428,9 +445,16 @@ def reset(ctx, interface: str, force: bool):
             click.echo("Operation cancelled")
             return
 
-        # ConfigDirectory from config file points to TSN traffic config directory
-        config_hub = TimeHubService(app_config)
-        config_hub.reset_config(interface=interface)
+        app_config = ctx.obj.get("app_config")
+        orch = Orchestrator(app_config=app_config)
+        req = ServiceRequest(
+            command=ServiceCommand.RESET,
+            service_type=ServiceType.TSN,
+            interface=interface,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TSNConfigError(svc_result.errors[0] if svc_result.errors else "Reset failed")
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -468,13 +492,18 @@ def validate(ctx, config_file: str):
     logger.info("Validating TSN configuration file...")
     app_config = ctx.obj.get("app_config")
 
-    # ConfigDirectory from config file points to TSN traffic config directory
-    config_hub = TimeHubService(app_config)
+    orch = Orchestrator(app_config=app_config)
     exit_code = TchExitCode.SUCCESS
 
-    try:    
-        if not config_hub.validate_config(config_file):
-            raise TSNConfigError(f"Configuration file {config_file} is invalid")
+    try:
+        req = ServiceRequest(
+            command=ServiceCommand.VALIDATE,
+            service_type=ServiceType.TSN,
+            config_path=config_file,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TSNConfigError(svc_result.errors[0] if svc_result.errors else f"Configuration file {config_file} is invalid")
 
         logger.info(f"Configuration file {config_file} is valid")
         click.echo("✓ Configuration validated successfully\n")
@@ -552,7 +581,7 @@ def config_show(ctx, format: str):
 
 #===============================================================================
 # TCH Configuration Commands for TCC Domain
-# Implemented as a subgroup under the main CLI (tch tcc <command>) 
+# Implemented as a subgroup under the main CLI (tch tcc <command>)
 #===============================================================================
 
 @cli.group()
@@ -587,9 +616,17 @@ def status(ctx, output_format: str):
     result = False
     try:
         app_config = ctx.obj.get("app_config")
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
-        status_info = config_hub.get_tcc_status()
+        req = ServiceRequest(
+            command=ServiceCommand.STATUS,
+            service_type=ServiceType.TCC,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TCCConfigError(svc_result.errors[0] if svc_result.errors else "Status failed")
+
+        status_info = svc_result.data or {}
 
         if output_format == "json":
             click.echo(json.dumps(status_info, indent=2))
@@ -641,7 +678,7 @@ def reset(ctx, force: bool):
 
     result = False
     try:
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
         # Confirm before resetting
         if not force and not click.confirm(
@@ -650,7 +687,13 @@ def reset(ctx, force: bool):
             click.echo("Operation cancelled")
             return
 
-        config_hub.reset_tcc_config()
+        req = ServiceRequest(
+            command=ServiceCommand.RESET,
+            service_type=ServiceType.TCC,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TCCConfigError(svc_result.errors[0] if svc_result.errors else "Reset failed")
 
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -696,13 +739,20 @@ def apply(ctx, config_file: str, dry_run: bool):
     result = False
 
     try:
-        # ConfigDirectory from config file points to TSN traffic config directory
-        config_hub = TimeHubService(app_config)
+        orch = Orchestrator(app_config=app_config)
 
         if dry_run:
             click.echo("DRY RUN MODE - No changes will be applied")
 
-        config_hub.apply_tcc_config(config_file, dry_run=dry_run)
+        req = ServiceRequest(
+            command=ServiceCommand.APPLY,
+            service_type=ServiceType.TCC,
+            config_path=config_file,
+            dry_run=dry_run,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TCCConfigError(svc_result.errors[0] if svc_result.errors else "Apply failed")
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -740,13 +790,18 @@ def validate(ctx, config_file: str):
     logger.info("Validating TCC configuration file...")
     app_config = ctx.obj.get("app_config")
 
-    # ConfigDirectory from config file points to TSN traffic config directory
-    config_hub = TimeHubService(app_config)
+    orch = Orchestrator(app_config=app_config)
     exit_code = TchExitCode.SUCCESS
 
     try:
-        if not config_hub.validate_tcc_config(config_file):
-            raise TCCConfigError(f"Configuration file {config_file} is invalid")
+        req = ServiceRequest(
+            command=ServiceCommand.VALIDATE,
+            service_type=ServiceType.TCC,
+            config_path=config_file,
+        )
+        svc_result = orch.execute(req)
+        if not svc_result.success:
+            raise TCCConfigError(svc_result.errors[0] if svc_result.errors else f"Configuration file {config_file} is invalid")
 
         logger.info(f"Configuration file {config_file} is valid")
         click.echo("✓ Configuration validated successfully\n")
@@ -769,13 +824,13 @@ def validate(ctx, config_file: str):
 #[HEAMINGS FOR TESTING ONLY] Orchestrator command implementation with topology and test configuration options, sending request to Orchestrator daemon via IPC
 #------------------------------------------------------------------------------
 # Orchestrator Command Implementation
-#   1) Accepts topology setup (either via config file or CLI flags), 
+#   1) Accepts topology setup (either via config file or CLI flags),
 #      test configuration, and orchestration configuration.
-#   2) Handles user input validation and error handling for the 
+#   2) Handles user input validation and error handling for the
 #      orchestration request.
-#   3) Sends the orchestration request to the Orchestrator daemon via 
+#   3) Sends the orchestration request to the Orchestrator daemon via
 #      the defined IPC mechanism (e.g. Unix socket).
-#   4) Provides feedback to the user on the status of their 
+#   4) Provides feedback to the user on the status of their
 #      orchestration request (e.g. accepted, validation errors, etc.)
 #------------------------------------------------------------------------------
 @cli.command()
@@ -796,8 +851,8 @@ def validate(ctx, config_file: str):
 @click.option("--listeners-port", default=22, type=int, show_default=True, help="Listeners SSH port")
 
 # --- Orchestrator: Test Configuration ---
-@click.option("--tcc-config", type=click.Path(exists=True), required=True, help="Path to TCC config XML file")
-@click.option("--tsn-config", type=click.Path(exists=True), required=True, help="Path to TSN config XML file")
+@click.option("--tcc-config", type=click.Path(exists=True), required=False, help="Path to TCC config XML file")
+@click.option("--tsn-config", type=click.Path(exists=True), required=False, help="Path to TSN config XML file")
 @click.option("--test-duration", type=int, default=None, help="Test duration in seconds")
 @click.option("--timeout", type=int, default=None, help="Max wait time before aborting (seconds)")
 @click.option(
@@ -806,6 +861,11 @@ def validate(ctx, config_file: str):
     default=None,
     help="YAML file describing workload, benchmark, and stage selections",
 )
+# --- Orchestrator: Stage selection flags ---
+@click.option("--install", "stage_install", is_flag=True, default=False, help="Run the install stage")
+@click.option("--apply-config", "stage_apply_config", is_flag=True, default=False, help="Run the apply_config stage")
+@click.option("--run", "stage_run", is_flag=True, default=False, help="Run the run stage")
+@click.option("--results", "stage_results", is_flag=True, default=False, help="Run the results stage")
 # --- Orchestrator: Option flags ---
 @click.option("--dry-run", is_flag=True, help="Show orchestration plan without executing")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
@@ -818,6 +878,7 @@ def orchestrate(
     listeners, listeners_user, listeners_password, listeners_port,
     tcc_config, tsn_config, test_duration, timeout,
     orchestration_config,
+    stage_install, stage_apply_config, stage_run, stage_results,
     dry_run, verbose, logfile,
 ):
     """
@@ -858,6 +919,10 @@ def orchestrate(
     :param Optional[int] test_duration: Expected test duration in seconds (for progress reporting)
     :param Optional[int] timeout: Max wait time before aborting in seconds (for timeout handling)
     :param Optional[str] orchestration_config: Path to YAML file defining workload, benchmark, and stage selections
+    :param bool stage_install: If true, include the install stage
+    :param bool stage_apply_config: If true, include the apply_config stage
+    :param bool stage_run: If true, include the run stage
+    :param bool stage_results: If true, include the results stage
     :param bool dry_run: If true, show orchestration plan without executing
     :param bool verbose: If true, enable verbose logging
     :param Optional[str] logfile: If set, path to log file for orchestration logs
@@ -877,7 +942,7 @@ def orchestrate(
         logging.getLogger().addHandler(log_fh)
 
     # Conflict Check: cannot use topology config file with CLI topology flags.
-    # Rationale: Assumption is dangerous that user will mix methods. 
+    # Rationale: Assumption is dangerous that user will mix methods.
     #           For simplicity and to avoid confusion, only one method shall be used to define topology.
     has_cli_topology = talker or listeners
     if topology_setup_config and has_cli_topology:
@@ -919,13 +984,13 @@ def orchestrate(
                 ssh_password=listeners_password,
                 ssh_port=listeners_port,
             ))
-        
+
         if len(listeners) == 1:
             topology_type = DeploymentTopologyType.B2B
             logger.info("Configured 1 talker and 1 listener → using B2B topology")
         else:
             topology_type = DeploymentTopologyType.MULTI_DUT
-            logger.info(f"Configured 1 talker and {len(listeners)} listeners → using B2B topology with multiple listeners") 
+            logger.info(f"Configured 1 talker and {len(listeners)} listeners → using B2B topology with multiple listeners")
 
     else:
         # No topology flags → LOCAL
@@ -933,19 +998,30 @@ def orchestrate(
         topology_type = DeploymentTopologyType.SINGLE_LOCAL
 
     # 2. Parse orchestration config (stages, workload, benchmark)
-    
-    # ORCHESTRATION STAGES PIPELINE: 
+
+    # ORCHESTRATION STAGES PIPELINE:
     #   1) validate_request: validate user input and config files (topology, TCC, TSN, orchestration)
     #   2) setup: prepare environment on DUTs (e.g. install dependencies, copy files)
     #   3) config: apply TCC and TSN configurations
     #   4) workflow: execute defined workflow (e.g. run tests, collect data)
     #   5) test: run post-configuration tests (e.g. connectivity, performance checks)
     #   6) teardown: clean up environment on DUTs (e.g. remove files, uninstall dependencies, reset configs)
-    all_stages = list(ORCHESTRATION_STAGES)
+    all_stages = list(WORKFLOW_STAGES)
     valid_stages = set(all_stages)
 
+    # Stage flags take precedence: build ordered list from flags (preserving ORCHESTRATION_STAGES order)
+    _flag_map = {
+        "install": stage_install,
+        "apply_config": stage_apply_config,
+        "run": stage_run,
+        "results": stage_results,
+    }
+    _selected_flags = [s for s in WORKFLOW_STAGES if _flag_map.get(s)]
+
     stages_to_run = []
-    if orchestration_config:
+    if _selected_flags:
+        stages_to_run = _selected_flags
+    elif orchestration_config:
         try:
             with open(orchestration_config, "r") as f:
                 orch_data = yaml.safe_load(f) or {}
@@ -956,8 +1032,8 @@ def orchestrate(
             click.echo(f"✗ Invalid YAML in orchestration config '{orchestration_config}': {e}", err=True)
             sys.exit(TchExitCode.USER_INPUT_ERROR)
         stages_to_run = orch_data.get("stages", [])
-        
-        # TODO: User configurable plugins 
+
+        # TODO: User configurable plugins
         # workload = orch_data.get("workload", "AI Workload")
         # benchmark = orch_data.get("benchmark", "RTC Test Bench")
 
@@ -970,22 +1046,27 @@ def orchestrate(
             )
             sys.exit(TchExitCode.USER_INPUT_ERROR)
     else:
-        stages_to_run = all_stages  # default to all stages if no orchestration config provided
+        stages_to_run = all_stages  # default to all stages if no flags or orchestration config provided
 
+    click.echo(f">>>Orchestration stages to run: {', '.join(stages_to_run)}")
     # 3. Validate TCC and TSN config files (click.Path(exists=True) already ensures they exist)
     app_config = ctx.obj.get("app_config")
-    config_hub = TimeHubService(app_config)
+    orch = Orchestrator(app_config=app_config)
     try:
-        if not config_hub.validate_config(tcc_config):
-            click.echo(f"✗ TCC config file '{tcc_config}' is invalid", err=True)
-            # TEMP-BYPASS: since TCC config validation is not fully implemented, 
-            # we will log the error but allow orchestration to proceed for now.
-            #sys.exit(TchExitCode.USER_INPUT_ERROR)
-        if not config_hub.validate_config(tsn_config):
-            click.echo(f"✗ TSN config file '{tsn_config}' is invalid", err=True)
-            # TEMP-BYPASS: since TSN config validation is not fully implemented, 
-            # we will log the error but allow orchestration to proceed for now.
-            #sys.exit(TchExitCode.USER_INPUT_ERROR)
+        if tcc_config:
+            tcc_req = ServiceRequest(command=ServiceCommand.VALIDATE, service_type=ServiceType.TCC, config_path=tcc_config)
+            if not orch.execute(tcc_req).success:
+                click.echo(f"✗ TCC config file '{tcc_config}' is invalid", err=True)
+                # TEMP-BYPASS: since TCC config validation is not fully implemented,
+                # we will log the error but allow orchestration to proceed for now.
+                #sys.exit(TchExitCode.USER_INPUT_ERROR)
+        if tsn_config:
+            tsn_req = ServiceRequest(command=ServiceCommand.VALIDATE, service_type=ServiceType.TSN, config_path=tsn_config)
+            if not orch.execute(tsn_req).success:
+                click.echo(f"✗ TSN config file '{tsn_config}' is invalid", err=True)
+                # TEMP-BYPASS: since TSN config validation is not fully implemented,
+                # we will log the error but allow orchestration to proceed for now.
+                #sys.exit(TchExitCode.USER_INPUT_ERROR)
     except TSNConfigError as e:
         click.echo(f"✗ Config validation failed: {e}", err=True)
         sys.exit(TchExitCode.USER_INPUT_ERROR)
@@ -1002,7 +1083,7 @@ def orchestrate(
         timeout=timeout,
     )
 
-    # Show orchestration plan summary 
+    # Show orchestration plan summary
     click.echo("\nOrchestration Plan Summary")
     click.echo("=" * 40)
     click.echo(f"Topology               : {topology_type.value}")
@@ -1140,7 +1221,7 @@ def _parse_topology_config(config_path: str) -> tuple[list[Target], DeploymentTo
     logger.info(f"Parsed topology config: {len(targets)} targets found")
     logger.info(f"Targets: {[t.ip_address for t in targets]}")
     logger.debug(f"Defaults: user={def_user}, port={def_port}")
-    
+
     # Auto-detect topology type based on roles present
     has_talker = talker_data is not None
     has_listeners = len(listeners_data) > 0
@@ -1164,6 +1245,11 @@ def main():
     :rtype: None
     """
     cli()
+
+
+# Register sub-command groups defined in separate modules
+from time_config_hub.cli.perf import perf_group  # noqa: E402
+cli.add_command(perf_group)
 
 
 if __name__ == "__main__":
