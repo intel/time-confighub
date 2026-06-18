@@ -88,6 +88,13 @@ select = ["E", "F"]
 ignore = ["E501"]
 
 
+[tool.ruff.lint.per-file-ignores]
+# F811: Click subgroup pattern intentionally reuses function names (e.g. `status`,
+# `reset`, `apply`, `validate`) under different CLI groups (`tsn` vs `tcc`).
+# Each decorated function is a distinct Click command and the name collision is by design.
+"src/time_config_hub/cli/root.py" = ["F811"]
+
+
 [tool.pylint.messages_control]
 disable = ["W1203", "W1201"]
 
