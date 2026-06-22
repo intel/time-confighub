@@ -16,7 +16,8 @@ from typing import Optional
 import click
 import yaml
 
-from time_config_hub.orchestrator.time_hub_service import TimeHubService
+from time_config_hub.orchestrator.ipc import send_service_request
+from time_config_hub.orchestrator.models import ServiceCommand, ServiceRequest, ServiceType
 from time_config_hub.exceptions import TSNConfigError
 from time_config_hub.cli.exit_codes import TchExitCode
 
@@ -49,20 +50,28 @@ def apply(ctx, config_file: str, interface: Optional[str], dry_run: bool):
     :raises TSNConfigError: If configuration application fails
     """
     logger.info(f"Applying configuration from file: {config_file}")
-    app_config = ctx.obj.get("app_config")
 
     result = False
 
     try:
-        config_hub = TimeHubService(app_config)
-
         if interface:
             click.echo(f"Target interface: {interface}")
 
         if dry_run:
             click.echo("DRY RUN MODE - No changes will be applied")
 
-        config_hub.apply_config(config_file, dry_run=dry_run)
+        request = ServiceRequest(
+            command=ServiceCommand.APPLY,
+            service_type=ServiceType.TSN,
+            config_path=config_file,
+            interface=interface,
+            dry_run=dry_run,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TSNConfigError("; ".join(response.errors))
+
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -111,11 +120,17 @@ def status(ctx, interface: str, output_format: str):
 
     result = False
     try:
-        app_config = ctx.obj.get("app_config")
+        request = ServiceRequest(
+            command=ServiceCommand.STATUS,
+            service_type=ServiceType.TSN,
+            interface=interface,
+        )
+        response = send_service_request(request)
 
-        config_hub = TimeHubService(app_config)
+        if not response.success:
+            raise TSNConfigError("; ".join(response.errors))
 
-        status_info = config_hub.get_status(interface=interface)
+        status_info = response.data or {}
 
         if output_format == "json":
             click.echo(json.dumps(status_info, indent=2))
@@ -167,7 +182,6 @@ def reset(ctx, interface: str, force: bool):
     :raises TSNConfigError: If configuration reset fails
     """
     logger.info("Resetting TSN configuration...")
-    app_config = ctx.obj.get("app_config")
 
     result = False
     try:
@@ -182,8 +196,16 @@ def reset(ctx, interface: str, force: bool):
             click.echo("Operation cancelled")
             return
 
-        config_hub = TimeHubService(app_config)
-        config_hub.reset_config(interface=interface)
+        request = ServiceRequest(
+            command=ServiceCommand.RESET,
+            service_type=ServiceType.TSN,
+            interface=interface,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TSNConfigError("; ".join(response.errors))
+
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -219,14 +241,19 @@ def validate(ctx, config_file: str):
     :param str config_file: Path to configuration file to validate
     """
     logger.info("Validating TSN configuration file...")
-    app_config = ctx.obj.get("app_config")
 
-    config_hub = TimeHubService(app_config)
     exit_code = TchExitCode.SUCCESS
 
     try:
-        if not config_hub.validate_config(config_file):
-            raise TSNConfigError(f"Configuration file {config_file} is invalid")
+        request = ServiceRequest(
+            command=ServiceCommand.VALIDATE,
+            service_type=ServiceType.TSN,
+            config_path=config_file,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TSNConfigError("; ".join(response.errors))
 
         logger.info(f"Configuration file {config_file} is valid")
         click.echo("✓ Configuration validated successfully\n")

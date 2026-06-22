@@ -28,11 +28,13 @@ import yaml
 
 from time_config_hub import __version__
 from time_config_hub.config.config_reader import load_app_config
-from time_config_hub.orchestrator.time_hub_service import TimeHubService
-from time_config_hub.cli.exit_codes import TchExitCode
 from time_config_hub.config.logging import setup_logging
+from time_config_hub.cli.exit_codes import TchExitCode
 from time_config_hub.cli.tcc import tcc
 from time_config_hub.cli.tsn import tsn
+from time_config_hub.orchestrator.orchestrator import Orchestrator
+from time_config_hub.cli.perf_pipeline import orchestrate
+
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,13 @@ def cli():
 #===============================================================================
 # Commands for TCH Daemon Management
 # Implemented as a subgroup under the main CLI (tch daemon <command>)
+#
+# Design Note:
+#   System service management commands (start/stop/restart/status) are implemented
+#   directly in the CLI through Orchestrator.service_manager rather than through
+#   the IPC mechanism to ensure they can be executed even when the daemon
+#   is not running (where IPC would fail).
+#
 #===============================================================================
 
 @cli.command()
@@ -84,8 +93,8 @@ def daemon_status(ctx):
     result = False
     try:
         # Check systemd service status
-        config_hub = TimeHubService(app_config)
-        service_status = config_hub.service_manager.get_service_status()
+        orchestrator = Orchestrator(app_config)
+        service_status = orchestrator.service_manager.get_service_status()
 
         if service_status == "active":
             status_msg = "✓ Service status: active"
@@ -140,17 +149,17 @@ def daemon_start(ctx):
     outcome_message = None
 
     try:
-        config_hub = TimeHubService(app_config)
+        orchestrator = Orchestrator(app_config)
 
         # Avoid restarting if already running
-        service_status = config_hub.service_manager.get_service_status()
+        service_status = orchestrator.service_manager.get_service_status()
         if service_status == "active":
             outcome_message = "✓ Daemon is already running"
             result = True
             exit_code = TchExitCode.SUCCESS
             return
 
-        config_hub.service_manager.start_service()
+        orchestrator.service_manager.start_service()
         outcome_message = "✓ Daemon started successfully"
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -188,16 +197,16 @@ def daemon_stop(ctx):
     result = False
     outcome_message = None
     try:
-        config_hub = TimeHubService(app_config)
+        orchestrator = Orchestrator(app_config)
 
-        service_status = config_hub.service_manager.get_service_status()
+        service_status = orchestrator.service_manager.get_service_status()
         if service_status != "active":
             outcome_message = "✓ Daemon is not running"
             result = True
             exit_code = TchExitCode.SUCCESS
             return
 
-        config_hub.service_manager.stop_service()
+        orchestrator.service_manager.stop_service()
         outcome_message = "✓ Daemon stopped successfully"
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -234,8 +243,8 @@ def daemon_restart(ctx):
 
     result = False
     try:
-        config_hub = TimeHubService(app_config)
-        config_hub.service_manager.restart_service()
+        orchestrator = Orchestrator(app_config)
+        orchestrator.service_manager.restart_service()
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -315,6 +324,11 @@ def config_show(ctx, format: str):
 
 cli.add_command(tsn)
 cli.add_command(tcc)
+
+#===============================================================================
+# Register Orchestrator subcommand group (defined in orchestrator.py)
+#===============================================================================
+cli.add_command(orchestrate)
 
 
 def main():
