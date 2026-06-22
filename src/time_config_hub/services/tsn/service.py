@@ -12,7 +12,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from time_config_hub.infra.linux.service_manager import ServiceManager
 from time_config_hub.infra.linux.tc_command import (
     create_tc_filter_commands_for_non_time_aware_talkers,
     create_tc_filter_commands_for_time_aware_talkers,
@@ -38,19 +37,7 @@ class TSNService(TSNServiceInterface):
     def __init__(self, app_config: Dict[str, Any]):
         logger.debug("Initializing Time Config Hub TSN Service...")
         self.app_config = app_config
-        
-        # config_dir suppose to store applied configuration backups
-        self.config_dir = Path(app_config.get("General", {}).get("ConfigDirectory"))
-        self.verbose = app_config.get("General", {}).get("Verbosity")
-        self.service_manager = ServiceManager()
-        
-        # Ensure config directory exists
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-
         self._parser = ConfigParserService(app_config)
-
-        logger.debug(f"TCH TSN Service initialized with config_dir: {self.config_dir}")
-
 
     def apply(self, config_file: str, dry_run: bool = False) -> None:
         """
@@ -66,7 +53,7 @@ class TSNService(TSNServiceInterface):
             logger.info(f"Applying configuration from {config_file}")
 
             # Parse configuration file
-            uparser = self._parser.parse_config(config_file) 
+            uparser = self._parser.parse_config(config_file)
             ge_dict = uparser.get_dictionary_helper()   # automatically checks chronos
             if not ge_dict:
                 logger.info("Chronos domain not found. No dictionary available.")
@@ -114,7 +101,7 @@ class TSNService(TSNServiceInterface):
         except TSNConfigError:
             # Preserve original traceback/context for domain errors.
             raise
-        
+
         except Exception as e:
             logger.exception(f"Unexpected error applying configuration: {config_file}")
             raise TSNConfigError("Unexpected error applying configuration") from e
@@ -249,7 +236,7 @@ class TSNService(TSNServiceInterface):
 
         if fail_count > 0:
             raise TSNConfigError(f"Failed to apply qdisc config: {config_file}")
-        
+
         logger.info(f"qdisc configuration applied successfully: {config_file}")
 
     def _apply_filter_configuration(
@@ -385,7 +372,7 @@ class TSNService(TSNServiceInterface):
             if not iface_path.exists():
                 logger.error(f"Interface {interface} does not exist.")
                 return False
-            
+
             # TODO: Additional TSN capability checks could be added here
             # For now, we assume any interface can be used
             return True

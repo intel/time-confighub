@@ -33,11 +33,10 @@ logger = logging.getLogger(__name__)
 class TCCService(TCCServiceInterface):
     """Default TCC service implementation."""
 
-    def __init__(self, app_config: Dict[str, Any]):
-        self._app_config = app_config
-        self.config_dir = Path(app_config.get("General", {}).get("ConfigDirectory"))
+    def __init__(self, tch_config: Dict[str, Any]):
+        self.config_dir = Path(tch_config.get("General", {}).get("ConfigDirectory"))
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        self._parser = ConfigParserService(app_config)
+        self._parser = ConfigParserService(tch_config)
         self._state_store = TCCStateStore(self.config_dir)
 
     def apply(self, config_file: str, dry_run: bool = False) -> None:

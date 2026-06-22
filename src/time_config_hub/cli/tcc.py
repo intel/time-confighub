@@ -15,7 +15,8 @@ import sys
 import click
 import yaml
 
-from time_config_hub.orchestrator.time_hub_service import TimeHubService
+from time_config_hub.orchestrator.ipc import send_service_request
+from time_config_hub.orchestrator.models import ServiceCommand, ServiceRequest, ServiceType
 from time_config_hub.exceptions import TCCConfigError
 from time_config_hub.cli.exit_codes import TchExitCode
 
@@ -54,10 +55,16 @@ def status(ctx, output_format: str):
 
     result = False
     try:
-        app_config = ctx.obj.get("app_config")
-        config_hub = TimeHubService(app_config)
+        request = ServiceRequest(
+            command=ServiceCommand.STATUS,
+            service_type=ServiceType.TCC,
+        )
+        response = send_service_request(request)
 
-        status_info = config_hub.get_tcc_status()
+        if not response.success:
+            raise TCCConfigError("; ".join(response.errors))
+
+        status_info = response.data or {}
 
         if output_format == "json":
             click.echo(json.dumps(status_info, indent=2))
@@ -105,12 +112,9 @@ def reset(ctx, force: bool):
     :raises TCCConfigError: If configuration reset fails
     """
     logger.info("Resetting TCC configuration back to system defaults...")
-    app_config = ctx.obj.get("app_config")
 
     result = False
     try:
-        config_hub = TimeHubService(app_config)
-
         # Confirm before resetting
         if not force and not click.confirm(
             "Are you sure you want to reset TCC configuration to defaults?"
@@ -118,7 +122,14 @@ def reset(ctx, force: bool):
             click.echo("Operation cancelled")
             return
 
-        config_hub.reset_tcc_config()
+        request = ServiceRequest(
+            command=ServiceCommand.RESET,
+            service_type=ServiceType.TCC,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TCCConfigError("; ".join(response.errors))
 
         result = True
         exit_code = TchExitCode.SUCCESS
@@ -159,17 +170,24 @@ def apply(ctx, config_file: str, dry_run: bool):
     :raises TCCConfigError: If configuration application fails
     """
     logger.info(f"Applying configuration from file: {config_file}")
-    app_config = ctx.obj.get("app_config")
 
     result = False
 
     try:
-        config_hub = TimeHubService(app_config)
-
         if dry_run:
             click.echo("DRY RUN MODE - No changes will be applied")
 
-        config_hub.apply_tcc_config(config_file, dry_run=dry_run)
+        request = ServiceRequest(
+            command=ServiceCommand.APPLY,
+            service_type=ServiceType.TCC,
+            config_path=config_file,
+            dry_run=dry_run,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TCCConfigError("; ".join(response.errors))
+
         result = True
         exit_code = TchExitCode.SUCCESS
 
@@ -205,14 +223,19 @@ def validate(ctx, config_file: str):
     :param str config_file: Path to configuration file to validate
     """
     logger.info("Validating TCC configuration file...")
-    app_config = ctx.obj.get("app_config")
 
-    config_hub = TimeHubService(app_config)
     exit_code = TchExitCode.SUCCESS
 
     try:
-        if not config_hub.validate_tcc_config(config_file):
-            raise TCCConfigError(f"Configuration file {config_file} is invalid")
+        request = ServiceRequest(
+            command=ServiceCommand.VALIDATE,
+            service_type=ServiceType.TCC,
+            config_path=config_file,
+        )
+        response = send_service_request(request)
+
+        if not response.success:
+            raise TCCConfigError("; ".join(response.errors))
 
         logger.info(f"Configuration file {config_file} is valid")
         click.echo("✓ Configuration validated successfully\n")
