@@ -17,6 +17,7 @@ from watchdog.observers import Observer
 
 from time_config_hub.config.config_reader import load_app_config
 from time_config_hub.config.logging import setup_logging
+from time_config_hub.orchestrator.ipc import start_server
 
 from .watch_handler import WatchHandler
 
@@ -40,6 +41,7 @@ class Service:
         """
         self.app_config = app_config
         self.observer = Observer()
+        self._orchestrator_server = None
 
     def start(self):
         """
@@ -85,6 +87,24 @@ class Service:
         self.observer.start()
         logger.debug("[daemon] Service started successfully")
 
+        # Start the orchestrator server in a separate thread
+        self._start_orchestrator_server()
+
+
+    def _start_orchestrator_server(self):
+        """
+        Start the Orchestrator socket server.
+
+        This sets up the Unix socket server for handling orchestration requests.
+        """
+        try:
+            self._orchestrator_server = start_server()
+            logger.debug("[daemon] Orchestrator server started successfully")
+        except Exception:
+            logger.exception("[daemon] Failed to start Orchestrator server")
+            raise
+
+
     def run_forever(self):
         """
         Run the service loop indefinitely.
@@ -120,6 +140,13 @@ class Service:
         logger.debug("[daemon] Stopping service...")
         self.observer.stop()
         self.observer.join()
+
+        # Stop Orchestrator server if it was started
+        if self._orchestrator_server:
+            self._orchestrator_server.shutdown()
+            self._orchestrator_server.server_close()
+            logger.debug("[daemon] Orchestrator server stopped successfully")
+
         logger.debug("[daemon] Service stopped.")
 
 

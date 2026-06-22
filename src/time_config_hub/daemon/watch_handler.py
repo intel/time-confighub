@@ -104,7 +104,7 @@ class WatchHandler(FileSystemEventHandler):
         if not event.is_directory and self._is_valid_config_file(file_path):
             logger.info(f"Submitting deleted event for processing: {file_path}")
             executor.submit(
-                TimeHubService(self.app_config).file_event_handler,
+                TimeHubService(self.app_config).tsn.file_event_handler,
                 "deleted",
                 file_path,
             )
@@ -136,7 +136,7 @@ class WatchHandler(FileSystemEventHandler):
         # Log and process the event
         logger.info(f"Submitting {event_type} event for processing: {file_path}")
         executor.submit(
-            TimeHubService(self.app_config).file_event_handler,
+            TimeHubService(self.app_config).tsn.file_event_handler,
             event_type,
             file_path,
         )
