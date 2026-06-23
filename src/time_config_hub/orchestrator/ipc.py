@@ -252,7 +252,7 @@ def send_pipeline_request(
     :raises socket.timeout: If the daemon does not respond within *timeout* seconds.
     """
     request = ServiceRequest(
-        command=ServiceCommand.PIPELINE,     # [HEAMING-TODO] This is explicitly for pipeline orchestration only.
+        command=ServiceCommand.PIPELINE,  # Trigger the full multi-stage workflow pipeline
         pipeline_config=config,
     )
     return send_service_request(request, socket_path=socket_path, timeout=timeout)

@@ -439,7 +439,7 @@ class Orchestrator:
             raise RuntimeError("_execute_workflow requires pipeline_config")
 
         # Set up targets based on the topology type and register remote targets for SSH access
-        targets = assign_target_roles(self.pipeline_config)
+        targets = assign_target_roles(config=self.pipeline_config)
         connect_remote_targets(targets, log=self._log)
 
         # Set the pipeline mode (single-target vs multi-DUT) and select the appropriate step retrieval function.
