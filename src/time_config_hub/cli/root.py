@@ -33,7 +33,6 @@ from time_config_hub.cli.exit_codes import TchExitCode
 from time_config_hub.cli.tcc import tcc
 from time_config_hub.cli.tsn import tsn
 from time_config_hub.orchestrator.orchestrator import Orchestrator
-from time_config_hub.cli.perf_pipeline import orchestrate
 
 
 logger = logging.getLogger(__name__)
@@ -324,11 +323,6 @@ def config_show(ctx, format: str):
 
 cli.add_command(tsn)
 cli.add_command(tcc)
-
-#===============================================================================
-# Register Orchestrator subcommand group (defined in orchestrator.py)
-#===============================================================================
-cli.add_command(orchestrate)
 
 
 def main():

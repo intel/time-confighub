@@ -214,14 +214,11 @@ class TimeHubService:
                     #self.apply_config(ctx.tsn_config_path, dry_run=dry_run)
                     output.append(f"TSN config applied from '{ctx.tsn_config_path}'")
             else:
-                # TODO: Transfer and apply TCC/TSN config for remote targets
                 logger.info("<<<<Applying config for remote target '%s'", target.id)
                 transport = self._make_transport(ctx)
                 if ctx.tcc_config_path:
                     transport.put_file(ctx.tcc_config_path, "/tmp/tcc.xml")
-                    #result = transport.run(["tch", "tcc", "apply", "/tmp/tcc.xml"])
-                    # HEAMINGS: TESTING THE PATH ONLY
-                    result = transport.run(["pip", "show", "pyserial"])
+                    result = transport.run(["tch", "tcc", "apply", "/tmp/tcc.xml"])
                     output.extend(result.as_log_lines())
                     if not result.success:
                         raise RuntimeError(
@@ -230,8 +227,7 @@ class TimeHubService:
                     output.append(f"[{target.id}] TCC config applied from '/tmp/tcc.xml'")
                 if ctx.tsn_config_path:
                     transport.put_file(ctx.tsn_config_path, "/tmp/tsn.xml")
-                    #result = transport.run(["tch", "tsn", "apply", "/tmp/tsn.xml"])
-                    result = transport.run(["pip", "show", "pyserial"])
+                    result = transport.run(["tch", "tsn", "apply", "/tmp/tsn.xml"])
                     output.extend(result.as_log_lines())
                     if not result.success:
                         raise RuntimeError(

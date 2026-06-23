@@ -119,7 +119,9 @@ def reset(ctx, force: bool):
         if not force and not click.confirm(
             "Are you sure you want to reset TCC configuration to defaults?"
         ):
-            click.echo("Operation cancelled")
+            result = True
+            click.echo("Reset operation cancelled by user.")
+            exit_code = TchExitCode.SUCCESS
             return
 
         request = ServiceRequest(
