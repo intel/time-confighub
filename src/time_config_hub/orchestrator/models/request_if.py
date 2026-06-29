@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from .pipeline import WORKFLOW_STAGES, StageResult
+from .pipeline import StageResult
 from .topology import DeploymentTopologyType, Target
 
 __all__ = [

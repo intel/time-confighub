@@ -74,7 +74,7 @@ class ExecutionResult:
         if self.stdout:
             lines.extend(self.stdout.splitlines())
         if self.stderr and not self.success:
-            lines.extend(f"[stderr] {l}" for l in self.stderr.splitlines())
+            lines.extend(f"[stderr] {line}" for line in self.stderr.splitlines())
         return lines
 
 
