@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
+import subprocess # nosec B404 (Controlled usage without shell=True)
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -91,7 +91,7 @@ def _generate_key() -> None:
         ],
         capture_output=True,
         text=True,
-    )
+    ) #nosec B603 B607 (Controlled usage without shell=True and user input is formatted as a list)
     if result.returncode != 0:
         raise RuntimeError(
             f"ssh-keygen failed: {(result.stdout + result.stderr).strip()}"
@@ -191,7 +191,7 @@ def ensure_key_auth(target: "Target") -> dict:
         capture_output=True,
         text=True,
         timeout=30,
-    )
+    ) #nosec B607 B603 (Controlled subprocess usage, no shell, trusted inputs)
 
     if result.returncode != 0:
         output = (result.stdout + result.stderr).strip()
@@ -218,7 +218,7 @@ def ensure_key_auth(target: "Target") -> dict:
         capture_output=True,
         text=True,
         timeout=20,
-    )
+    ) #nosec B607 B603 (Controlled subprocess usage, no shell, trusted inputs)
 
     if verify.returncode != 0 or "tch-key-ok" not in verify.stdout:
         output = (verify.stdout + verify.stderr).strip()

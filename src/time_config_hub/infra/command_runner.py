@@ -13,7 +13,7 @@ Note:
 """
 
 import logging
-import subprocess
+import subprocess # nosec B404 (Controlled usage without shell=True)
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)

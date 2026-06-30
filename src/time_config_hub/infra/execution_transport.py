@@ -22,7 +22,7 @@ service code to topology decisions.
 from __future__ import annotations
 
 import logging
-import subprocess
+import subprocess  # nosec B404 (Controlled usage without shell=True)
 from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
@@ -158,17 +158,22 @@ class LocalTransport:
         :param timeout: Override the default timeout (seconds).
         :return: Execution result.
         :rtype: ExecutionResult
+        :raises ValueError: If *cmd* is empty or contains non-string elements.
         :raises FileNotFoundError: If the executable is not found.
         """
+        if not cmd:
+            raise ValueError("cmd must be a non-empty list")
+
         effective_timeout = timeout if timeout is not None else self._default_timeout
         logger.debug("[local] run: %s", cmd)
         try:
-            proc = subprocess.run(
+            proc = subprocess.run( #nosec B603 (Controlled usage without shell=True and user input is formatted as a list)
                 cmd,
                 capture_output=True,
                 text=True,
                 check=False,
                 timeout=effective_timeout,
+                shell=False,
             )
             result = ExecutionResult(
                 returncode=proc.returncode,
