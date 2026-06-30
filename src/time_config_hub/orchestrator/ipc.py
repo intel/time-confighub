@@ -305,5 +305,15 @@ def send_service_request(
 
         result_dict = json.loads(resp_data.decode("utf-8").strip())
         return ServiceResult(**result_dict)
+    except ConnectionRefusedError:
+        raise ConnectionError(f"Could not connect to orchestrator daemon at {socket_path}. Is it running?")
+    except socket.timeout:
+        raise TimeoutError(f"Timed out waiting for response from orchestrator daemon at {socket_path}")
+    except ConnectionError:
+        raise  # Internal connection error and re-raised as it is
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise ConnectionError(f"Invalid response from orchestrator daemon at {socket_path}: {e}")
+    except OSError as e:
+        raise ConnectionError(f"OS error while communicating with orchestrator daemon: {e}")
     finally:
         sock.close()
