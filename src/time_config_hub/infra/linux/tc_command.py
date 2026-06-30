@@ -35,7 +35,7 @@ Example
 
 import shlex
 import socket
-import subprocess
+import subprocess # nosec B404 (Controlled usage without shell=True)
 import time
 from typing import Any, Dict, List, Optional
 
@@ -596,7 +596,7 @@ def create_tc_filter_commands_for_time_aware_talkers(
     adds one to enable egress filtering.
 
     **Example Output**
-    
+
     .. code-block:: bash
 
         tc qdisc add dev enp170s0 clsact
@@ -608,8 +608,8 @@ def create_tc_filter_commands_for_time_aware_talkers(
             action skbedit priority 3
 
     :param vlan_time_aware_info:
-        Parsed talker information from 
-        :meth:`GE_Dictionary.get_vlan_tagged_time_aware_talker_info`, 
+        Parsed talker information from
+        :meth:`GE_Dictionary.get_vlan_tagged_time_aware_talker_info`,
         where each key is a stream ID and each value is a list of talker dictionaries.
     :type vlan_time_aware_info: Dict[str, List[Dict[str, Any]]]
 
@@ -622,7 +622,7 @@ def create_tc_filter_commands_for_time_aware_talkers(
         If ``tc qdisc show dev`` command fails unexpectedly.
 
     **Implementation Details**
-    
+
     - Automatically ensures ``clsact`` exists per interface.
     - Uses separate chain pairs for each talker (N and N+1).
     - Dynamically builds commands only with fields available in the dataset.
@@ -696,7 +696,7 @@ def create_tc_filter_commands_for_non_time_aware_talkers(
     and produces one ``tc filter`` rule per talker that *pushes* a VLAN tag.
 
     **Example Output**
-    
+
     .. code-block:: bash
 
         tc filter add dev eth0 egress protocol ip flower \
@@ -719,7 +719,7 @@ def create_tc_filter_commands_for_non_time_aware_talkers(
         If required VLAN attributes are missing from a talker entry.
 
     **Implementation Notes**
-    
+
     - Builds IP-based flower filters that push VLAN headers.
     - Uses ``action vlan push`` rather than ``modify``.
     - Dynamically includes only fields that exist in the talker data.

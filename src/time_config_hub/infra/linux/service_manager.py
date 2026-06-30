@@ -11,7 +11,7 @@ service file deployment, systemd interactions, and error management.
 
 import logging
 import shutil
-import subprocess
+import subprocess # nosec B404 (Controlled usage without shell=True)
 from importlib import resources
 
 from time_config_hub.config.constants import TCH_DAEMON_SERVICE_FILE

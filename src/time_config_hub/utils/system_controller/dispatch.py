@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-import subprocess
+import subprocess # nosec B404 (Controlled usage without shell=True)
 from pathlib import Path
 from typing import Optional
 
@@ -131,7 +131,7 @@ def _run_local(cmd: list[str], timeout: int = 600) -> dict:
     cmd_str = " ".join(str(c) for c in cmd)
     _log.debug("[RUN] local cmd: %s", cmd_str)
     try:
-        result = subprocess.run(
+        result = subprocess.run( #nosec B603 (Controlled usage without shell=True and user input is formatted as a list)
             cmd,
             capture_output=True,
             text=True,
@@ -261,7 +261,7 @@ def start_remote_process(
     try:
         return subprocess.Popen(
             ssh_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        ) #nosec B603 (Controlled usage without shell=True and user input is formatted as a list)
     except FileNotFoundError:
         _log.error("[POPEN] ssh binary not found")
         return None
@@ -305,7 +305,7 @@ def get_file(
     _log.debug("[GET] %s:%s → %s (recursive=%s)", target.identity, remote_path, local, recursive)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout) #nosec B603 (Controlled usage without shell=True and user input is formatted as a list)
     except subprocess.TimeoutExpired:
         _log.warning("[GET] TIMEOUT after %ds — %s:%s", timeout, target_id, remote_path)
         return _fail(f"Timed out after {timeout}s", TchStatusCode.TIMEOUT)
@@ -373,7 +373,7 @@ def put_file(
     _log.debug("[PUT] %s → %s:%s (recursive=%s)", local, target.identity, remote_path, recursive)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout) #nosec B603 (Controlled usage without shell=True and user input is formatted as a list)
     except subprocess.TimeoutExpired:
         _log.warning("[PUT] TIMEOUT after %ds — %s → %s:%s", timeout, local, target_id, remote_path)
         return _fail(f"Timed out after {timeout}s", TchStatusCode.TIMEOUT)

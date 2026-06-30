@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional
@@ -216,24 +217,34 @@ class TimeHubService:
             else:
                 logger.info("<<<<Applying config for remote target '%s'", target.id)
                 transport = self._make_transport(ctx)
+                # Use a unique per-run directory under /tmp to avoid predictable
+                # filenames that could be exploited via symlink attacks (CWE-377).
+                _run_id = uuid.uuid4().hex
+                _tmp_dir = f"/tmp/tch-{_run_id}"  # nosec B108
+                transport.run(["mkdir", "-p", _tmp_dir])
                 if ctx.tcc_config_path:
-                    transport.put_file(ctx.tcc_config_path, "/tmp/tcc.xml")
-                    result = transport.run(["tch", "tcc", "apply", "/tmp/tcc.xml"])
+                    _tcc_remote = f"{_tmp_dir}/tcc.xml"
+                    transport.put_file(ctx.tcc_config_path, _tcc_remote)
+                    result = transport.run(["tch", "tcc", "apply", _tcc_remote])
                     output.extend(result.as_log_lines())
+                    transport.run(["rm", "-f", _tcc_remote])
                     if not result.success:
                         raise RuntimeError(
                             f"[{target.id}] tcc apply failed (exit {result.returncode}): {result.stderr.strip()}"
                         )
-                    output.append(f"[{target.id}] TCC config applied from '/tmp/tcc.xml'")
+                    output.append(f"[{target.id}] TCC config applied")
                 if ctx.tsn_config_path:
-                    transport.put_file(ctx.tsn_config_path, "/tmp/tsn.xml")
-                    result = transport.run(["tch", "tsn", "apply", "/tmp/tsn.xml"])
+                    _tsn_remote = f"{_tmp_dir}/tsn.xml"
+                    transport.put_file(ctx.tsn_config_path, _tsn_remote)
+                    result = transport.run(["tch", "tsn", "apply", _tsn_remote])
                     output.extend(result.as_log_lines())
+                    transport.run(["rm", "-f", _tsn_remote])
                     if not result.success:
                         raise RuntimeError(
                             f"[{target.id}] tsn apply failed (exit {result.returncode}): {result.stderr.strip()}"
                         )
-                    output.append(f"[{target.id}] TSN config applied from '/tmp/tsn.xml'")
+                    output.append(f"[{target.id}] TSN config applied")
+                transport.run(["rmdir", "--ignore-fail-on-non-empty", _tmp_dir])
             output.append(f"[{target.id}] Configuration applied")
         return output
 
