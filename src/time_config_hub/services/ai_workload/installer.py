@@ -284,9 +284,11 @@ class AIWorkloadInstaller:
     def _install_worker(self) -> None:
         """Worker thread target: iterate SETUP_STEPS and persist progress after each.
 
-        Checks the stop event before every step.  On cancellation or step failure
-        the state is set to ``"error"`` and the method returns.  On success the
-        state is set to ``"done"`` with ``overall_percent = 100``.
+        Checks the stop event before every step.  On user cancellation the state
+        is set to ``"cancelled"`` and all remaining steps (from the cancellation
+        point onward) are marked :attr:`~.state.StepStatus.CANCELLED`.  On step
+        failure the state is set to ``"error"``.  On success the state is set to
+        ``"done"`` with ``overall_percent = 100``.
 
         The target label is removed from :attr:`_active_targets` in a ``finally``
         block regardless of outcome.
@@ -298,10 +300,13 @@ class AIWorkloadInstaller:
                 if self._state.stop_event.is_set():
                     with self._lock:
                         self._state.end_time = time.monotonic()
-                        self._state.state = WorkloadState.ERROR
-                        if idx < len(self._state.steps):
-                            self._state.steps[idx]["status"] = StepStatus.FAILED
-                            self._state.steps[idx][
+                        self._state.state = WorkloadState.CANCELLED
+                        # Mark all remaining steps as cancelled
+                        for cancel_idx in range(idx, len(self._state.steps)):
+                            self._state.steps[cancel_idx][
+                                "status"
+                            ] = StepStatus.CANCELLED
+                            self._state.steps[cancel_idx][
                                 "detail"
                             ] = "Cancelled by stop signal"
                         snapshot = self._snapshot_under_lock()
@@ -391,6 +396,7 @@ def _read_persisted_progress(target_label: str) -> Optional[InstallProgress]:
     try:
         data = json.loads(path.read_text())
         data["steps"] = [StepProgress(**s) for s in data.get("steps", [])]
+        data["state"] = WorkloadState(data["state"])
         return InstallProgress(**data)
     except Exception:  # noqa: BLE001
         return None

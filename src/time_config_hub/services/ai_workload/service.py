@@ -291,19 +291,27 @@ class AIWorkload:
             )
 
     def _install_worker(self) -> None:
-        """Worker thread: run SETUP_STEPS sequentially, update progress in-memory."""
+        """Worker thread: run SETUP_STEPS sequentially, update progress in-memory.
+
+        On user cancellation the state is set to ``"cancelled"`` and all remaining
+        steps (from the cancellation point onward) are marked
+        :attr:`~.state.StepStatus.CANCELLED`.  On step failure the state is set to
+        ``"error"``.  On success the state is set to ``"done"``.
+        """
         total = len(SETUP_STEPS)
         try:
             for idx, step in enumerate(SETUP_STEPS):
                 if self._install_state.stop_event.is_set():
                     with self._install_lock:
                         self._install_state.end_time = time.monotonic()
-                        self._install_state.state = WorkloadState.ERROR
-                        if idx < len(self._install_state.steps):
-                            self._install_state.steps[idx]["status"] = StepStatus.FAILED
-                            self._install_state.steps[idx]["detail"] = (
-                                "Cancelled by stop signal"
-                            )
+                        self._install_state.state = WorkloadState.CANCELLED
+                        for cancel_idx in range(idx, len(self._install_state.steps)):
+                            self._install_state.steps[cancel_idx][
+                                "status"
+                            ] = StepStatus.CANCELLED
+                            self._install_state.steps[cancel_idx][
+                                "detail"
+                            ] = "Cancelled by user"
                     logger.info(
                         "[ai_workload] install cancelled at step %d for '%s'",
                         idx,
