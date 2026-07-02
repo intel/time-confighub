@@ -142,7 +142,7 @@ class AIWorkload:
         during installation, and after completion.
 
         :return: Step-level progress snapshot.
-        :rtype: ProgressDict
+        :rtype: InstallProgress
         """
         return self._build_install_progress()
 
@@ -214,7 +214,7 @@ class AIWorkload:
         Safe to call before :meth:`start`, during a run, and after stopping.
 
         :return: Live benchmark metrics snapshot.
-        :rtype: BenchmarkProgressDict
+        :rtype: BenchmarkProgress
         """
         return self._runner.get_progress().data
 
