@@ -34,7 +34,13 @@ from time_config_hub.utils.common.status_codes import TchStatusCode
 
 from .helper import _run_cmds
 from .setup import SETUP_STEPS
-from .state import InstallProgress, StepProgress, StepStatus, WorkloadState, _InstallState
+from .state import (
+    InstallProgress,
+    StepProgress,
+    StepStatus,
+    WorkloadState,
+    _InstallState,
+)
 
 _log = logging.getLogger("ai_workload.installer")
 
@@ -96,7 +102,7 @@ class AIWorkloadInstaller:
 
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
               — installation thread started; ``data`` is the initial
-              :class:`~.state.ProgressDict`.
+              :class:`~.state.InstallProgress`.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.ALREADY_RUNNING`
               — another installation for this target is already active.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.ERROR`
@@ -165,7 +171,7 @@ class AIWorkloadInstaller:
 
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
               — cancellation signal sent; ``data`` is the current
-              :class:`~.state.ProgressDict`.
+              :class:`~.state.InstallProgress`.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.NOT_RUNNING`
               — no installation was running.
         :rtype: ServiceResult
@@ -194,7 +200,7 @@ class AIWorkloadInstaller:
 
         :return: :class:`~.state.ServiceResult` with
             :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
-            and ``data`` set to the current :class:`~.state.ProgressDict`.
+            and ``data`` set to the current :class:`~.state.InstallProgress`.
         :rtype: ServiceResult
         """
         return ServiceResult(
@@ -205,13 +211,13 @@ class AIWorkloadInstaller:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _build_progress(self) -> InstallProgress:
-        """Build a :class:`~.state.ProgressDict` snapshot from the current state.
+        """Build a :class:`~.state.InstallProgress` snapshot from the current state.
 
         Acquires ``_lock`` internally; must **not** be called while the lock is
         already held by the calling thread.
 
         :return: Current progress snapshot.
-        :rtype: ProgressDict
+        :rtype: InstallProgress
         """
         with self._lock:
             elapsed = (
@@ -377,8 +383,8 @@ def _read_persisted_progress(target_label: str) -> Optional[InstallProgress]:
     file is malformed.
 
     :param str target_label: Target label string (``transport.target_label``).
-    :return: Last persisted :class:`~.state.ProgressDict`, or ``None``.
-    :rtype: Optional[ProgressDict]
+    :return: Last persisted :class:`~.state.InstallProgress`, or ``None``.
+    :rtype: Optional[InstallProgress]
     """
     key = f"{_COMPONENT}__{target_label}"
     path = _STATE_DIR / f"installation_progress_{key}.json"
