@@ -46,7 +46,7 @@ class AIWorkloadMaxRetriesError(RuntimeError):
 
     Propagates out of the worker thread so callers can react via
     :func:`threading.excepthook` or by inspecting
-    :attr:`~.state.BenchmarkProgressDict.run_error` from
+    :attr:`~.state.BenchmarkProgress.run_error` from
     :meth:`AIWorkloadRunner.get_progress`.
     """
 
@@ -68,7 +68,7 @@ class AIWorkloadRunner:
         result = runner.start(duration_s=60)   # returns immediately
 
         # poll from any thread
-        progress = runner.get_progress()       # ServiceResult; data = BenchmarkProgressDict
+        progress = runner.get_progress()       # ServiceResult; data = BenchmarkProgress
 
         # stop early
         runner.stop()
@@ -103,7 +103,7 @@ class AIWorkloadRunner:
 
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
               — worker started; ``data`` is the initial
-              :class:`~.state.BenchmarkProgressDict`.
+              :class:`~.state.BenchmarkProgress`.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.ALREADY_RUNNING`
               — a benchmark is already in progress on this instance.
         :rtype: ServiceResult
@@ -163,7 +163,7 @@ class AIWorkloadRunner:
 
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
               — stop signal sent; ``data`` is the current
-              :class:`~.state.BenchmarkProgressDict`.
+              :class:`~.state.BenchmarkProgress`.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.NOT_RUNNING`
               — no benchmark was running.
         :rtype: ServiceResult
@@ -198,7 +198,7 @@ class AIWorkloadRunner:
 
         :return: :class:`~.state.ServiceResult` with
             :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
-            and ``data`` set to the current :class:`~.state.BenchmarkProgressDict`.
+            and ``data`` set to the current :class:`~.state.BenchmarkProgress`.
         :rtype: ServiceResult
         """
         return ServiceResult(
@@ -213,8 +213,8 @@ class AIWorkloadRunner:
 
         **Must be called while** ``_lock`` **is held.**
 
-        :return: Current :class:`~.state.BenchmarkProgressDict`.
-        :rtype: BenchmarkProgressDict
+        :return: Current :class:`~.state.BenchmarkProgress`.
+        :rtype: BenchmarkProgress
         """
         elapsed = (
             max(0.0, time.monotonic() - self._state.start_time)
@@ -243,8 +243,8 @@ class AIWorkloadRunner:
         Must **not** be called while ``_lock`` is already held by the calling
         thread.
 
-        :return: Current :class:`~.state.BenchmarkProgressDict`.
-        :rtype: BenchmarkProgressDict
+        :return: Current :class:`~.state.BenchmarkProgress`.
+        :rtype: BenchmarkProgress
         """
         with self._lock:
             return self._build_progress_locked()
