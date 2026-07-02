@@ -29,7 +29,7 @@ from time_config_hub.utils.common.status_codes import TchStatusCode
 
 from .config import AIWorkloadConfig
 from .run import _resolve_model, _run_benchmark, _stop_benchmark
-from .state import BenchmarkProgress, _RunState
+from .state import BenchmarkProgress, WorkloadState, _RunState
 
 _log = logging.getLogger("ai_workload.runner")
 
@@ -123,6 +123,7 @@ class AIWorkloadRunner:
             # Reset state for reuse
             self._state.stop_event.clear()
             self._state.is_running = True
+            self._state.state = WorkloadState.RUNNING
             self._state.duration_s = duration_s
             self._state.start_time = time.monotonic()
             self._state.metrics = {}
@@ -235,6 +236,7 @@ class AIWorkloadRunner:
             metrics=dict(self._state.metrics),
             metrics_history=list(self._state.metrics_history),
             run_error=self._state.run_error,
+            state=self._state.state,
         )
 
     def _build_progress(self) -> BenchmarkProgress:
@@ -264,9 +266,16 @@ class AIWorkloadRunner:
            seconds then retries.
         6. Exits the loop when ``stop_event`` is set.
 
+        Final :attr:`~.state._RunState.state` transitions:
+
+        - ``cancelled`` — :meth:`stop` was called by the user.
+        - ``error``     — max consecutive failures exceeded.
+        - ``done``      — loop exited cleanly (duration elapsed or natural end).
+
         :param int duration_s: Per-run benchmark duration in seconds.
         """
         consecutive_failures = 0
+        final_state = WorkloadState.DONE
         try:
             while not self._state.stop_event.is_set():
                 model_xml = _resolve_model(self._transport, self._config)
@@ -305,11 +314,14 @@ class AIWorkloadRunner:
                     sampler.join(timeout=BENCHMARK_SAMPLE_INTERVAL_S + 2)
 
                 if self._state.stop_event.is_set():
+                    final_state = WorkloadState.CANCELLED
                     break
 
                 if success:
                     consecutive_failures = 0
-                    final_metrics = _try_read_ai_metrics(self._transport, self._config.report_json)
+                    final_metrics = _try_read_ai_metrics(
+                        self._transport, self._config.report_json
+                    )
                     elapsed = (
                         max(0.0, time.monotonic() - self._state.start_time)
                         if self._state.start_time > 0
@@ -352,6 +364,7 @@ class AIWorkloadRunner:
                 self._transport.target_label,
                 exc,
             )
+            final_state = WorkloadState.ERROR
             with self._lock:
                 self._state.run_error = str(exc)
             raise
@@ -359,6 +372,7 @@ class AIWorkloadRunner:
             with self._lock:
                 self._state.is_running = False
                 self._state.run_index = 0
+                self._state.state = final_state
             _log.info(
                 "[runner] worker loop finished for %s", self._transport.target_label
             )
