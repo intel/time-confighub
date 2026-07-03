@@ -119,9 +119,6 @@ class AIWorkloadInstaller:
                         "Create a new instance to retry."
                     ),
                 )
-
-        # Initialise state under lock before the thread can see it
-        with self._lock:
             self._state.started = True
             self._state.state = WorkloadState.RUNNING
             self._state.overall_percent = 0
