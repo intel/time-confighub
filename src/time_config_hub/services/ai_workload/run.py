@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from time_config_hub.infra.execution_transport import ExecutionTransport, LocalTransport
+from time_config_hub.infra.execution_transport import ExecutionTransport
 
 from .config import AIWorkloadConfig
 from .helper import _run_cmds
@@ -67,8 +67,8 @@ def _run_benchmark(
     :param ExecutionTransport transport: Transport to run the benchmark on.
     :param AIWorkloadConfig config: Configuration providing binary paths and
         benchmark parameters.
-    :param Optional[threading.Event] stop_event: Cancellation signal (local
-        execution only).
+    :param Optional[threading.Event] stop_event: Cancellation signal (local or
+        remote); when set, sends ``pkill benchmark_app`` through the transport.
     :return: ``(success, output_lines)``.
     :rtype: tuple[bool, list[str]]
     """
@@ -96,8 +96,13 @@ def _run_benchmark(
 
     cmds = [{"info": "run benchmark_app", "cmd": cmd_str, "timeout": duration_s + 60}]
 
-    is_local = isinstance(transport, LocalTransport)
-    if stop_event is not None and is_local:
+    if stop_event is not None:
+        # Early-exit: already cancelled before we even start.
+        if stop_event.is_set():
+            output.append("  [run_benchmark] Cancelled by stop signal")
+            _log.warning("[run_workload] benchmark_app was cancelled")
+            return False, output
+
         # Run the blocking _run_cmds call in a daemon thread so the main thread
         # can monitor stop_event and cancel via pkill if needed.
         _result: list[tuple[bool, str]] = []
@@ -109,7 +114,10 @@ def _run_benchmark(
         t.start()
         while t.is_alive():
             if stop_event.is_set():
-                _log.info("[run_workload] stop_event set — killing local benchmark_app")
+                _log.info(
+                    "[run_workload] stop_event set — killing benchmark_app on %s",
+                    target_label,
+                )
                 transport.run(["pkill", "-f", "benchmark_app"])
                 t.join(timeout=15)
                 output.append("  [run_benchmark] Cancelled by stop signal")
