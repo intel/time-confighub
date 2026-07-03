@@ -447,13 +447,28 @@ def _try_read_ai_metrics(transport: ExecutionTransport, report_json: object) -> 
         else:
             summary = data  # top-level fallback
 
-        # Latency key may be "latency" or "latency_ms" depending on version.
-        latency = summary.get("latency") or summary.get("latency_ms") or {}
+        # Latency key may be "latency" or "latency_ms" (nested dict) depending
+        # on OpenVINO version, or flat string keys "avg latency" / "min latency"
+        # / "max latency" (ms values as strings) used by newer benchmark_app.
+        latency_raw = summary.get("latency") or summary.get("latency_ms")
+        if isinstance(latency_raw, dict):
+            latency = {
+                "min": float(latency_raw.get("min", 0)),
+                "avg": float(latency_raw.get("avg", latency_raw.get("mean", 0))),
+                "max": float(latency_raw.get("max", 0)),
+            }
+        else:
+            # Flat-key format: "min latency", "avg latency", "max latency" (ms)
+            latency = {
+                "min": float(summary.get("min latency", 0)),
+                "avg": float(summary.get("avg latency", summary.get("latency (ms)", 0))),
+                "max": float(summary.get("max latency", 0)),
+            }
         throughput = float(
             summary.get("throughput") or summary.get("item_per_second") or 0
         )
 
-        if not latency and not throughput:
+        if not throughput and not any(latency.values()):
             _log.warning(
                 "[runner] _try_read_ai_metrics: no usable data on %s "
                 "— top-level keys: %s",
@@ -463,9 +478,9 @@ def _try_read_ai_metrics(transport: ExecutionTransport, report_json: object) -> 
             return {}
 
         metrics = {
-            "latency_min_us": float(latency.get("min", 0)) * 1000,
-            "latency_avg_us": float(latency.get("avg", latency.get("mean", 0))) * 1000,
-            "latency_max_us": float(latency.get("max", 0)) * 1000,
+            "latency_min_us": latency["min"] * 1000,
+            "latency_avg_us": latency["avg"] * 1000,
+            "latency_max_us": latency["max"] * 1000,
             "throughput_fps": throughput,
         }
         _log.info(
