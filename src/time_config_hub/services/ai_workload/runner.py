@@ -2,15 +2,34 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-time_config_hub.services.ai_workload.runner — reusable AI workload benchmark runner.
+time_config_hub.services.ai_workload.runner — benchmark runner (internal collaborator).
 
-Multiple :class:`AIWorkloadRunner` instances may run simultaneously on different
-transports.  A single instance is reusable: after a run finishes or is stopped,
-call :meth:`~AIWorkloadRunner.start` again to begin a new run.
+Internal to :class:`~.service.AIWorkload`.  One :class:`AIWorkloadRunner`
+instance is created per DUT by :class:`~.service.AIWorkload` and receives the
+same :class:`~.config.AIWorkloadConfig`; it is not designed for direct
+instantiation by callers.
 
-Public API
-----------
-AIWorkloadRunner            : Reusable benchmark runner class.
+Benchmark execution model
+-------------------------
+``start(duration_s)`` divides the total requested duration into
+``round(duration_s / config.bench_duration_s)`` *unit-runs*, each of exactly
+``config.bench_duration_s`` seconds.  After every unit-run ``benchmark_app``
+writes ``benchmark_report.json`` to the configured report directory, making
+updated metrics immediately available.  The runner transitions to ``DONE``
+automatically when all unit-runs complete — no explicit ``stop()`` call is
+required for normal usage.
+
+Call ``stop()`` only to cancel the benchmark early.  ``run_index`` is
+preserved after ``is_running`` becomes ``False`` so callers can read the
+final completed count; it is reset to ``0`` when ``start()`` is called again.
+
+A single instance is reusable: after a session finishes or is cancelled, the
+owning :class:`~.service.AIWorkload` calls :meth:`~AIWorkloadRunner.start`
+again to begin a new session.
+
+Internal API
+------------
+AIWorkloadRunner            : Benchmark runner (owned by AIWorkload).
 AIWorkloadMaxRetriesError   : Raised when the benchmark loop exceeds the consecutive
                               failure limit.
 BENCHMARK_SAMPLE_INTERVAL_S : Metrics sampling interval (seconds).
@@ -52,7 +71,11 @@ class AIWorkloadMaxRetriesError(RuntimeError):
 
 
 class AIWorkloadRunner:
-    """Reusable AI workload benchmark runner for one transport target.
+    """Benchmark runner for one transport target.
+
+    An internal collaborator of :class:`~.service.AIWorkload` — not intended
+    for direct use.  :class:`~.service.AIWorkload` creates one instance per DUT
+    in its constructor and passes its bound :class:`~.config.AIWorkloadConfig`.
 
     Multiple instances may co-exist and run simultaneously.  After a run ends
     (naturally or via :meth:`stop`), the same instance may be reused by calling
@@ -62,31 +85,18 @@ class AIWorkloadRunner:
     -------------
     All public methods are safe to call from any thread concurrently.
 
-    Example usage::
-
-        runner = AIWorkloadRunner(transport)
-        result = runner.start(duration_s=60)   # returns immediately
-
-        # poll from any thread
-        progress = runner.get_progress()       # ServiceResult; data = BenchmarkProgress
-
-        # stop early
-        runner.stop()
-
-        # reuse
-        result = runner.start(duration_s=120)
-
     :param ExecutionTransport transport: Execution transport for the target.
-    :param AIWorkloadConfig config: Configuration; uses defaults if omitted.
+    :param AIWorkloadConfig config: Configuration; required — always supplied
+        by :class:`~.service.AIWorkload` from its bound config.
     """
 
     def __init__(
         self,
         transport: ExecutionTransport,
-        config: AIWorkloadConfig | None = None,
+        config: AIWorkloadConfig,
     ) -> None:
         self._transport = transport
-        self._config = config or AIWorkloadConfig()
+        self._config = config
         self._state = _RunState(target_label=transport.target_label)
         self._lock = threading.Lock()
 
@@ -95,21 +105,30 @@ class AIWorkloadRunner:
     def start(self, duration_s: int | None = None) -> ServiceResult:
         """Start the benchmark worker thread and return immediately.
 
-        If the previous run has finished, state is reset automatically so the
-        same instance can be reused.
+        Divides *duration_s* into ``round(duration_s / config.bench_duration_s)``
+        unit-runs.  After each unit-run ``benchmark_app`` writes
+        ``benchmark_report.json``, making metrics available.  The runner
+        transitions to ``DONE`` automatically when all unit-runs complete.
 
-        :param int duration_s: Benchmark duration in seconds.
+        If the previous session has finished, state is reset automatically so
+        the same instance can be reused.
+
+        :param int duration_s: Total benchmark duration in seconds.  Divided
+            by :attr:`~.config.AIWorkloadConfig.bench_duration_s` to determine
+            the number of unit-runs.  Defaults to
+            :attr:`~.config.AIWorkloadConfig.bench_duration_s` (one unit-run).
         :return: :class:`~.state.ServiceResult` with:
 
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.SUCCESS`
               — worker started; ``data`` is the initial
               :class:`~.state.BenchmarkProgress`.
             * :attr:`~time_config_hub.utils.common.status_codes.TchStatusCode.ALREADY_RUNNING`
-              — a benchmark is already in progress on this instance.
+              — a benchmark session is already in progress on this instance.
         :rtype: ServiceResult
         """
         if duration_s is None:
             duration_s = self._config.bench_duration_s
+        total_runs = max(1, round(duration_s / self._config.bench_duration_s))
         with self._lock:
             if self._state.is_running:
                 return ServiceResult(
@@ -125,6 +144,8 @@ class AIWorkloadRunner:
             self._state.is_running = True
             self._state.state = WorkloadState.RUNNING
             self._state.duration_s = duration_s
+            self._state.total_runs = total_runs
+            self._state.run_index = 0
             self._state.start_time = time.monotonic()
             self._state.metrics = {}
             self._state.metrics_history = []
@@ -132,7 +153,7 @@ class AIWorkloadRunner:
 
         t = threading.Thread(
             target=self._run_worker,
-            args=(duration_s,),
+            args=(total_runs,),
             daemon=True,
             name=f"ai_runner_{self._transport.target_label}",
         )
@@ -155,10 +176,12 @@ class AIWorkloadRunner:
         )
 
     def stop(self) -> ServiceResult:
-        """Stop the running benchmark and return immediately.
+        """Cancel the benchmark session before all unit-runs complete.
 
         Sets the internal stop event and sends a ``pkill`` signal to
         ``benchmark_app``.  Does not wait for the worker thread to finish.
+        Not needed when the session completes normally — the runner
+        auto-transitions to ``DONE`` after the last unit-run.
 
         :return: :class:`~.state.ServiceResult` with:
 
@@ -223,12 +246,15 @@ class AIWorkloadRunner:
             else 0.0
         )
         duration_s = self._state.duration_s
+        total_runs = self._state.total_runs
+        run_index = self._state.run_index
+        pct = min(100, int(run_index / total_runs * 100)) if total_runs > 0 else 0
         remaining = max(0.0, duration_s - elapsed)
-        pct = min(100, int(elapsed / duration_s * 100)) if duration_s > 0 else 0
         return BenchmarkProgress(
             node_id=self._transport.target_label,
             is_running=self._state.is_running,
-            run_index=self._state.run_index,
+            run_index=run_index,
+            total_runs=total_runs,
             duration_s=duration_s,
             elapsed_s=elapsed,
             remaining_s=remaining,
@@ -253,31 +279,43 @@ class AIWorkloadRunner:
 
     # ── Worker thread ─────────────────────────────────────────────────────────
 
-    def _run_worker(self, duration_s: int) -> None:
-        """Worker thread target: run benchmark in a continuous loop until stopped.
+    def _run_worker(self, total_runs: int) -> None:
+        """Worker thread target: run ``total_runs`` benchmark iterations and stop.
+
+        Each iteration uses :attr:`~.config.AIWorkloadConfig.bench_duration_s`
+        as the per-run duration.  After each successful run ``benchmark_app``
+        writes ``benchmark_report.json``, making metrics immediately available.
 
         Each iteration:
 
-        1. Resolves the best available model.
-        2. Starts a metrics-sampling sub-thread.
-        3. Calls ``_run_benchmark`` (blocks until completion or cancellation).
-        4. On success: updates live metrics and increments ``run_index``.
-        5. On failure (without a stop request): waits ``_BENCH_RETRY_DELAY_S``
-           seconds then retries.
-        6. Exits the loop when ``stop_event`` is set.
+        1. Exits the loop if ``stop_event`` is set or ``run_index >= total_runs``.
+        2. Resolves the best available model.
+        3. Starts a metrics-sampling sub-thread.
+        4. Calls ``_run_benchmark`` with ``bench_duration_s`` (blocks until done).
+        5. On success: reads metrics, increments ``run_index``.
+        6. On failure (without a stop request): waits ``_BENCH_RETRY_DELAY_S``
+           and retries (up to ``_MAX_CONSECUTIVE_FAILURES``).
 
         Final :attr:`~.state._RunState.state` transitions:
 
-        - ``cancelled`` — :meth:`stop` was called by the user.
+        - ``done``      — all ``total_runs`` iterations completed successfully.
+        - ``cancelled`` — :meth:`stop` was called before all runs finished.
         - ``error``     — max consecutive failures exceeded.
-        - ``done``      — loop exited cleanly (duration elapsed or natural end).
 
-        :param int duration_s: Per-run benchmark duration in seconds.
+        :param int total_runs: Number of :attr:`~.config.AIWorkloadConfig.bench_duration_s`
+            iterations to execute.
         """
         consecutive_failures = 0
         final_state = WorkloadState.DONE
         try:
-            while not self._state.stop_event.is_set():
+            while True:
+                if self._state.stop_event.is_set():
+                    final_state = WorkloadState.CANCELLED
+                    break
+                with self._lock:
+                    runs_done = self._state.run_index
+                if runs_done >= total_runs:
+                    break  # all requested runs completed → DONE
                 model_xml = _resolve_model(self._transport, self._config)
                 if model_xml is None:
                     _log.error(
@@ -299,7 +337,7 @@ class AIWorkloadRunner:
                 try:
                     success, _lines = _run_benchmark(
                         model_xml,
-                        duration_s,
+                        self._config.bench_duration_s,
                         self._transport,
                         self._config,
                         self._state.stop_event,
@@ -317,7 +355,7 @@ class AIWorkloadRunner:
                     final_state = WorkloadState.CANCELLED
                     break
 
-                if success:
+                if success:  # noqa: SIM102
                     consecutive_failures = 0
                     final_metrics = _try_read_ai_metrics(
                         self._transport, self._config.report_json
@@ -371,7 +409,9 @@ class AIWorkloadRunner:
         finally:
             with self._lock:
                 self._state.is_running = False
-                self._state.run_index = 0
+                # run_index is intentionally kept as the final completed count
+                # so callers can read it after is_running becomes False.
+                # It is reset to 0 in start() when the runner is reused.
                 self._state.state = final_state
             _log.info(
                 "[runner] worker loop finished for %s", self._transport.target_label
