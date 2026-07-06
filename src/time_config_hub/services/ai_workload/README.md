@@ -34,19 +34,22 @@ stateDiagram-v2
         Idle --> Installing : install()
         Installing --> Done : all steps OK
         Installing --> Error : step failed
-        Installing --> Error : cancel_install()
+        Installing --> Cancelled : cancel_install()
     }
 
     state "Runtime phase" as Runtime {
-        Done --> Verifying : start()
+        Done --> Verifying : start(duration_s)
         Verifying --> Benchmarking : env checks pass
         Verifying --> Error2 : env check failed
-        Benchmarking --> Stopped : stop()
+        Benchmarking --> Done2 : all unit-runs complete
+        Benchmarking --> Cancelled2 : stop() called early
     }
 
     Error --> [*]
     Error2 --> [*]
-    Stopped --> [*]
+    Cancelled --> [*]
+    Done2 --> [*]
+    Cancelled2 --> [*]
 ```
 
 ---
@@ -83,9 +86,16 @@ flowchart TD
 
 ## Class relationships
 
+`AIWorkload` is the per-DUT **facade**. It owns one `AIWorkloadInstaller` and
+one `AIWorkloadRunner` — both created at construction time and bound to the
+same `AIWorkloadConfig` instance. Both are **internal collaborators** (not for
+direct use); `AIWorkload` delegates the full setup phase to `AIWorkloadInstaller`
+and the benchmark runtime to `AIWorkloadRunner`.
+
 ```mermaid
 classDiagram
     class AIWorkload {
+        <<facade · per DUT>>
         +install() None
         +get_install_progress() InstallProgress
         +cancel_install() None
@@ -93,61 +103,48 @@ classDiagram
         +get_run_progress() BenchmarkProgress
         +stop() None
         +collect_logs() list[str]
-        -_runner : AIWorkloadRunner
-        -_install_state : _InstallState
-    }
-
-    class AIWorkloadInstaller {
-        +start() ServiceResult
-        +cancel() ServiceResult
-        +get_progress() ServiceResult
-        -_state : _InstallState
     }
 
     class AIWorkloadRunner {
+        <<internal · benchmark runtime>>
         +start(duration_s) ServiceResult
         +stop() ServiceResult
         +get_progress() ServiceResult
-        -_state : _RunState
+    }
+
+    class AIWorkloadInstaller {
+        <<internal · setup phase>>
+        +start() ServiceResult
+        +cancel() ServiceResult
+        +get_progress() ServiceResult
     }
 
     class AIWorkloadConfig {
+        <<config · required · single source of truth>>
         +venv_base_dir str
         +openvino_version str
         +bench_duration_s int
         +bench_device str
     }
 
-    class ServiceResult {
-        +status_code TchStatusCode
-        +output str
-        +error str
-        +data Any
-        +success bool
-    }
-
     class _InstallState {
-        +state WorkloadState
-        +steps list[dict]
-        +overall_percent int
-        +stop_event Event
+        <<internal · setup progress>>
     }
 
     class _RunState {
-        +is_running bool
-        +run_index int
-        +metrics dict
-        +stop_event Event
+        <<internal · benchmark progress>>
     }
 
-    AIWorkload --> AIWorkloadRunner : owns
-    AIWorkload --> _InstallState : owns
-    AIWorkloadInstaller --> _InstallState : owns
-    AIWorkloadRunner --> _RunState : owns
-    AIWorkloadInstaller ..> ServiceResult : returns
-    AIWorkloadRunner ..> ServiceResult : returns
-    AIWorkloadInstaller ..> AIWorkloadConfig : configured by
-    AIWorkloadRunner ..> AIWorkloadConfig : configured by
+    %% ── AIWorkload facade (config required at construction) ────────────────
+    AIWorkload *-- AIWorkloadInstaller : owns (setup phase)
+    AIWorkload *-- AIWorkloadRunner : owns (benchmark runtime)
+    AIWorkloadConfig --> AIWorkload : required
+    AIWorkloadConfig --> AIWorkloadRunner : required
+    AIWorkloadConfig --> AIWorkloadInstaller : required
+
+    %% ── Internal state ──────────────────────────────────────────────────────
+    AIWorkloadInstaller *-- _InstallState : setup progress
+    AIWorkloadRunner *-- _RunState : benchmark progress
 ```
 
 ---
@@ -167,7 +164,7 @@ workload.install()                          # non-blocking; spawns thread
 while True:
     progress = workload.get_install_progress()
     print(progress.overall_percent, progress.state)
-    if progress.state in ("done", "error"):
+    if progress.state in ("done", "error", "cancelled"):
         break
     time.sleep(2)
 
@@ -189,9 +186,9 @@ logs = workload.collect_logs()             # retrieves report JSON from DUT
 |---|---|---|
 | `ServiceResult` | `installer.*`, `runner.*` | Wrapper: `status_code`, `output`, `error`, `data` |
 | `InstallProgress` | `get_install_progress()` | Install snapshot: `state`, `overall_percent`, `steps[]` |
-| `BenchmarkProgress` | `get_run_progress()` | Live metrics: latency, throughput, `run_index` |
-| `StepStatus` | `StepDict.status` | `PENDING → RUNNING → DONE / FAILED` |
-| `WorkloadState` | `_InstallState.state` | `NOT_STARTED → RUNNING → DONE / ERROR` |
+| `BenchmarkProgress` | `get_run_progress()` | Metrics snapshot: `run_index`, `total_runs`, `percent_complete`, latency, throughput |
+| `StepStatus` | `StepDict.status` | `PENDING → RUNNING → DONE / FAILED / CANCELLED` |
+| `WorkloadState` | `_InstallState.state`, `_RunState.state` | `NOT_STARTED → RUNNING → DONE / ERROR / CANCELLED` |
 
 ---
 

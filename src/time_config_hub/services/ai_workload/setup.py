@@ -385,13 +385,3 @@ def build_verify_steps(config: AIWorkloadConfig) -> list[dict]:
     :rtype: list[dict]
     """
     return [s for s in build_setup_steps(config) if s.get("verify")]
-
-
-# ── Module-level step lists (default config, used by service.py) ──────────────
-# service.py imports these directly; they are pre-built with default config so
-# the caller doesn't need to pass a config object for the common case.
-
-_defaults = AIWorkloadConfig()
-SETUP_STEPS: list[dict] = build_setup_steps(_defaults)
-VERIFY_STEPS: list[dict] = build_verify_steps(_defaults)
-del _defaults
