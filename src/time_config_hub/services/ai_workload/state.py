@@ -130,11 +130,13 @@ class BenchmarkProgress:
 
     :param str node_id: Target label (``transport.target_label``).
     :param bool is_running: Whether the benchmark worker thread is active.
-    :param int run_index: Number of iterations completed in the current session.
-    :param int duration_s: Requested per-run benchmark duration in seconds.
-    :param float elapsed_s: Computed fresh at call time.
-    :param float remaining_s: Computed fresh at call time.
-    :param int percent_complete: 0–100.
+    :param int run_index: Number of single-unit runs completed in the current session.
+    :param int total_runs: Total number of single-unit runs requested.
+    :param int duration_s: Total requested benchmark duration in seconds
+        (``total_runs * config.bench_duration_s``).
+    :param float elapsed_s: Wall-clock seconds elapsed since start; computed fresh at call time.
+    :param float remaining_s: Estimated wall-clock seconds remaining; computed fresh at call time.
+    :param int percent_complete: 0–100, derived from ``run_index / total_runs``.
     :param dict metrics: Latest metrics snapshot (keys: ``latency_min_us``,
         ``latency_avg_us``, ``latency_max_us``, ``throughput_fps``).
     :param list metrics_history: All in-session snapshots with an added ``elapsed_s`` field.
@@ -145,6 +147,7 @@ class BenchmarkProgress:
     node_id: str
     is_running: bool
     run_index: int
+    total_runs: int
     duration_s: int
     elapsed_s: float
     remaining_s: float
@@ -219,6 +222,7 @@ class _RunState:
     target_label: str = ""
     is_running: bool = False
     run_index: int = 0
+    total_runs: int = 0
     duration_s: int = 0
     start_time: float = 0.0
     stop_event: threading.Event = field(default_factory=threading.Event)

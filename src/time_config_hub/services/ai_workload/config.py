@@ -37,7 +37,7 @@ class AIWorkloadConfig:
     :param str torchvision_version: torchvision package version to install.
     :param str onnxscript_version: onnxscript package version to install.
     :param str nncf_version: NNCF package version to install.
-    :param int bench_duration_s: Benchmark duration in seconds.
+    :param int bench_duration_s: Benchmark duration in seconds per run.
     :param str bench_device: OpenVINO inference device (e.g. ``"CPU"``).
     :param str bench_cpu_cores: CPU core affinity for ``taskset`` (e.g. ``"4,5"``).
     :param int bench_batch: Batch size for benchmark_app.

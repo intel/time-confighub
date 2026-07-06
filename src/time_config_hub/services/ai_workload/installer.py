@@ -10,9 +10,12 @@ operation per target; the runtime phase (:class:`~.service.AIWorkloadService`)
 assumes it has already completed successfully.
 
 One :class:`AIWorkloadInstaller` instance handles one installation attempt.
-Progress is persisted to ``~/.tch/installation_progress_ai_workload__<label>.json``
-after each step so the caller can poll it independently of instance lifetime.
-The per-target registry (at-most-one-active rule) is owned by the caller.
+The setup steps are built once at construction from the supplied
+:class:`~.config.AIWorkloadConfig`, so a custom config drives the commands run
+on the target.  Progress is persisted to
+``~/.tch/installation_progress_ai_workload__<label>.json`` after each step so
+the caller can poll it independently of instance lifetime.  The per-target
+registry (at-most-one-active rule) is owned by the caller.
 
 Public API
 ----------
@@ -21,6 +24,7 @@ AIWorkloadInstaller : Single-use installer class.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import threading
@@ -32,8 +36,9 @@ from time_config_hub.infra.execution_transport import ExecutionTransport
 from time_config_hub.services.common.result import ServiceResult
 from time_config_hub.utils.common.status_codes import TchStatusCode
 
+from .config import AIWorkloadConfig
 from .helper import _run_cmds
-from .setup import SETUP_STEPS
+from .setup import build_setup_steps
 from .state import (
     InstallProgress,
     StepProgress,
@@ -51,41 +56,41 @@ _COMPONENT = "ai_workload"
 class AIWorkloadInstaller:
     """Single-use AI workload installer for one transport target.
 
+    Internal collaborator of :class:`~.service.AIWorkload` — not intended for
+    direct use.  :class:`~.service.AIWorkload` creates one instance per DUT in
+    its constructor and passes its bound :class:`~.config.AIWorkloadConfig`.
+
     Handles a single installation attempt: manages the worker thread, tracks
     per-step progress, and persists state to disk.  It has no knowledge of
     other installers or concurrent targets.
 
-    The caller owns the per-target registry and enforces the
-    at-most-one-active-per-target rule.  To retry after completion or
-    cancellation, create a new instance — the same instance cannot be restarted.
+    To retry after completion or cancellation, the owning
+    :class:`~.service.AIWorkload` must be replaced with a new instance —
+    the same installer cannot be restarted.
 
     Thread safety
     -------------
     All public methods are safe to call from any thread concurrently.
 
-    Example usage::
-
-        installer = AIWorkloadInstaller(transport)
-        result = installer.start()          # returns immediately
-        # … poll from another thread …
-        progress = installer.get_progress()
-        # … or cancel …
-        installer.cancel()
-
     :param ExecutionTransport transport: Execution transport for the target.
+    :param AIWorkloadConfig config: Configuration used to build the setup
+        steps; always supplied by :class:`~.service.AIWorkload` from its bound
+        config.
     :param _on_finish: Optional zero-argument callback invoked exactly once
         when the installation finishes (success, failure, or cancellation).
         Called from the worker thread's ``finally`` block, or from
-        :meth:`start` if thread spawning fails.  Used by the caller's
-        installer registry to deregister the target on completion.
+        :meth:`start` if thread spawning fails.
     """
 
     def __init__(
         self,
         transport: ExecutionTransport,
+        config: AIWorkloadConfig,
         _on_finish: Optional[Callable[[], None]] = None,
     ) -> None:
         self._transport = transport
+        self._config = config
+        self._setup_steps = build_setup_steps(self._config)
         self._on_finish = _on_finish
         self._state = _InstallState(
             target_label=transport.target_label,
@@ -126,7 +131,7 @@ class AIWorkloadInstaller:
             self._state.stop_event.clear()
             self._state.steps = [
                 {"label": step["name"], "status": StepStatus.PENDING, "detail": ""}
-                for step in SETUP_STEPS
+                for step in self._setup_steps
             ]
 
         # Spawn worker — notify manager on any failure to start
@@ -279,7 +284,7 @@ class AIWorkloadInstaller:
     # ── Worker thread ─────────────────────────────────────────────────────────
 
     def _install_worker(self) -> None:
-        """Worker thread target: iterate SETUP_STEPS and persist progress after each.
+        """Worker thread target: iterate the configured setup steps and persist progress after each.
 
         Checks the stop event before every step.  On user cancellation the state
         is set to ``"cancelled"`` and all remaining steps (from the cancellation
@@ -290,9 +295,9 @@ class AIWorkloadInstaller:
         The target label is removed from :attr:`_active_targets` in a ``finally``
         block regardless of outcome.
         """
-        total = len(SETUP_STEPS)
+        total = len(self._setup_steps)
         try:
-            for idx, step in enumerate(SETUP_STEPS):
+            for idx, step in enumerate(self._setup_steps):
                 # Cancellation check — happens before each step
                 if self._state.stop_event.is_set():
                     with self._lock:
@@ -394,6 +399,9 @@ def _read_persisted_progress(target_label: str) -> Optional[InstallProgress]:
         data = json.loads(path.read_text())
         data["steps"] = [StepProgress(**s) for s in data.get("steps", [])]
         data["state"] = WorkloadState(data["state"])
-        return InstallProgress(**data)
+        # Drop keys not accepted by InstallProgress (e.g. start_time written
+        # by _snapshot_under_lock for internal bookkeeping only).
+        valid_fields = {f.name for f in dataclasses.fields(InstallProgress)}
+        return InstallProgress(**{k: v for k, v in data.items() if k in valid_fields})
     except Exception:  # noqa: BLE001
         return None
