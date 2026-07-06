@@ -108,8 +108,8 @@ def status(ctx, interface: str, output_format: str):
     Show current TSN configuration status.
 
     Example usage:
-        tch tsn status -i eth0 --format json
-        tch tsn status --format yaml
+        tch tsn status eth0 --format json
+        tch tsn status eth0 --format yaml
 
     :param ctx: Click context object
     :param Optional[str] interface: Network interface to show
@@ -175,7 +175,7 @@ def reset(ctx, interface: str, force: bool):
     Reset TSN configuration to defaults.
 
     Example usage:
-        tch tsn reset -i eth0
+        tch tsn reset eth0
 
     :param ctx: Click context object
     :param Optional[str] interface: Network interface to reset
@@ -188,12 +188,14 @@ def reset(ctx, interface: str, force: bool):
         if interface:
             message = f"Reset TSN configuration for interface {interface}?"
         else:
-            message = "Please provide an interface. Usage: tch reset -i <interface>"
+            message = "Please provide an interface. Usage: tch tsn reset <interface>"
             raise TSNConfigError("No interface specified for reset")
 
         # Confirm before resetting
         if not force and not click.confirm(message):
+            result = True
             click.echo("Operation cancelled")
+            exit_code: TchExitCode = TchExitCode.SUCCESS
             return
 
         request = ServiceRequest(
