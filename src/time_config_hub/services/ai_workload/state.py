@@ -23,9 +23,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import List, Optional
 
-from time_config_hub.services.common.result import (
-    ServiceResult,  # noqa: F401 – re-exported for callers
-)
 
 # ── Status enums ──────────────────────────────────────────────────────────────
 
@@ -173,8 +170,6 @@ class BenchmarkProgress:
 class _InstallState:
     """Mutable installation state owned by :class:`~.service.AIWorkload`.
 
-    All fields are written under the owning instance's ``_lock``.
-
     :param str target_label: Human-readable transport label (``transport.target_label``).
     :param str component: Component name.
     :param WorkloadState state: Overall workload state.
@@ -203,8 +198,6 @@ class _InstallState:
 @dataclass
 class _RunState:
     """Mutable benchmark run state owned by :class:`~.runner.AIWorkloadRunner`.
-
-    All fields are written under the owning instance's ``_lock``.
 
     :param str target_label: Human-readable transport label (``transport.target_label``).
     :param bool is_running: Whether the benchmark worker thread is active.
