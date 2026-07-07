@@ -116,10 +116,10 @@ tch tsn apply config.json --interface eth0 --dry-run
 sudo tch tsn apply config.json --interface eth0
 
 # Get current config status
-tch tsn status --interface eth0 --format json
+tch tsn status eth0 --format json
 
 # Reset TSN configuration
-sudo tch tsn reset --interface eth0
+sudo tch tsn reset eth0
 
 # Validate configuration file
 tch tsn validate config.json  # Note: Not yet implemented
@@ -133,7 +133,7 @@ tch daemon-status
 
 # Control systemd daemon service
 sudo tch daemon-start
-sudo tch daemon-stop  
+sudo tch daemon-stop
 sudo tch daemon-restart
 ```
 
@@ -157,7 +157,7 @@ sudo tch daemon-restart
 
 ### Configuration Files
 
-Time Config Hub supports both XML and JSON formats. 
+Time Config Hub supports both XML and JSON formats.
 
 ### Supported Stream types and Queue allocation
 
@@ -197,7 +197,7 @@ print(f"Current config status: {status}")
 ```
 
 ### Functional Test Example
-For detailed instructions and sample configuration files, see 
+For detailed instructions and sample configuration files, see
 [examples/scenario_1](examples/scenario_1).
 
 
